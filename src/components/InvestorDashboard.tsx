@@ -45,11 +45,13 @@ export function InvestorDashboard({ investor, history, transactions, trades = []
   const PIE_COLORS = ['#10b981', '#6366f1'];
 
   // Pro-rata trading stats
-  const winningTrades = trades.filter(t => t.profit > 0);
-  const losingTrades = trades.filter(t => t.profit < 0);
-  const systemGrossProfit = winningTrades.reduce((sum, t) => sum + t.profit, 0);
-  const systemGrossLoss = Math.abs(losingTrades.reduce((sum, t) => sum + t.profit, 0));
-  const systemProfitFactor = systemGrossLoss > 0 ? (systemGrossProfit / systemGrossLoss) : (systemGrossProfit > 0 ? Infinity : 0);
+  const winningTrades = trades.filter(t => (t.profit + (t.commission || 0) + (t.swap || 0)) > 0);
+  const losingTrades = trades.filter(t => (t.profit + (t.commission || 0) + (t.swap || 0)) < 0);
+  const systemNetGrossProfit = winningTrades.reduce((sum, t) => sum + (t.profit + (t.commission || 0) + (t.swap || 0)), 0);
+  const systemNetGrossLoss = Math.abs(losingTrades.reduce((sum, t) => sum + (t.profit + (t.commission || 0) + (t.swap || 0)), 0));
+  const systemProfitFactor = systemNetGrossLoss > 0 ? (systemNetGrossProfit / systemNetGrossLoss) : (systemNetGrossProfit > 0 ? Infinity : 0);
+  const avgWin = winningTrades.length > 0 ? systemNetGrossProfit / winningTrades.length : 0;
+  const avgLoss = losingTrades.length > 0 ? systemNetGrossLoss / losingTrades.length : 0;
 
   const generatePDF = async () => {
     if (!dashboardRef.current) return;
@@ -211,7 +213,7 @@ export function InvestorDashboard({ investor, history, transactions, trades = []
       </div>
 
       {trades.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <div className="flex items-center gap-2 mb-2">
               <TrendingUp className="w-5 h-5 text-fuchsia-500" />
@@ -221,17 +223,31 @@ export function InvestorDashboard({ investor, history, transactions, trades = []
           </div>
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="w-5 h-5 text-emerald-500" />
+              <h3 className="text-sm font-semibold text-slate-700">Avg Win (Net)</h3>
+            </div>
+            <p className="text-2xl font-bold text-emerald-600">{formatCurrency(avgWin)}</p>
+          </div>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingDown className="w-5 h-5 text-rose-500" />
+              <h3 className="text-sm font-semibold text-slate-700">Avg Loss (Net)</h3>
+            </div>
+            <p className="text-2xl font-bold text-rose-600">-{formatCurrency(avgLoss)}</p>
+          </div>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <div className="flex items-center gap-2 mb-2">
               <TrendingUp className="w-5 h-5 text-green-500" />
               <h3 className="text-sm font-semibold text-slate-700">System Gross Profit</h3>
             </div>
-            <p className="text-2xl font-bold text-green-600">{formatCurrency(systemGrossProfit)}</p>
+            <p className="text-2xl font-bold text-green-600">{formatCurrency(systemNetGrossProfit)}</p>
           </div>
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <div className="flex items-center gap-2 mb-2">
               <TrendingDown className="w-5 h-5 text-red-500" />
               <h3 className="text-sm font-semibold text-slate-700">System Gross Loss</h3>
             </div>
-            <p className="text-2xl font-bold text-red-600">-{formatCurrency(systemGrossLoss)}</p>
+            <p className="text-2xl font-bold text-red-600">-{formatCurrency(systemNetGrossLoss)}</p>
           </div>
         </div>
       )}

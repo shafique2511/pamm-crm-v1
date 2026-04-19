@@ -116,14 +116,17 @@ export function JournalView({ trades, onSyncMT5, totalCapital, readOnly }: { tra
   // Prepare cumulative chart data (oldest to newest)
   const chartData = [...filteredTrades].reverse().reduce((acc, trade) => {
     const prevTotal = acc.length > 0 ? acc[acc.length - 1].cumulative : 0;
+    const netTradeProfit = trade.profit + (trade.commission || 0) + (trade.swap || 0);
     acc.push({
       ticket: trade.ticket,
       date: new Date(trade.closeTime).toLocaleDateString(),
-      profit: trade.profit,
-      cumulative: prevTotal + trade.profit
+      profit: netTradeProfit,
+      cumulative: prevTotal + netTradeProfit
     });
     return acc;
   }, [] as any[]);
+
+  const expectancy = filteredTrades.length > 0 ? (totalProfit + filteredTrades.reduce((s,t) => s + (t.commission||0) + (t.swap||0), 0)) / filteredTrades.length : 0;
 
   // Profit by Symbol
   const profitBySymbol = filteredTrades.reduce((acc, t) => {
@@ -182,6 +185,13 @@ export function JournalView({ trades, onSyncMT5, totalCapital, readOnly }: { tra
             <p className="text-sm font-medium text-slate-500">Total Trades</p>
           </div>
           <p className="text-2xl font-bold text-slate-900">{trades.length}</p>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <div className="flex items-center gap-2 mb-1">
+            <Target className="w-4 h-4 text-blue-500" />
+            <p className="text-sm font-medium text-slate-500">Expectancy</p>
+          </div>
+          <p className="text-2xl font-bold text-blue-600">{formatCurrency(expectancy)}</p>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
           <div className="flex items-center gap-2 mb-1">
