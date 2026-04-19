@@ -59,7 +59,16 @@ export function InvestorDashboard({ investor, history, transactions, trades = []
       const canvas = await html2canvas(dashboardRef.current, {
         scale: 2,
         useCORS: true,
-        logging: false
+        logging: false,
+        backgroundColor: '#ffffff',
+        onclone: (clonedDoc, element) => {
+          // Force background to white and apply legacy color overrides for the capture target
+          if (element) {
+            element.classList.add('pdf-capture');
+            element.style.backgroundColor = '#ffffff';
+            element.style.padding = '20px'; // Add some padding for the PDF
+          }
+        }
       });
       
       const imgData = canvas.toDataURL('image/png');
@@ -237,7 +246,7 @@ export function InvestorDashboard({ investor, history, transactions, trades = []
                 <XAxis dataKey="date" stroke="#64748b" />
                 <YAxis tickFormatter={(val) => `$${val}`} stroke="#64748b" />
                 <Tooltip 
-                  formatter={(val: any) => formatCurrency(Number(val))}
+                  formatter={(val: number) => formatCurrency(val)}
                   contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
                 <Line type="monotone" dataKey="capital" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
@@ -270,7 +279,7 @@ export function InvestorDashboard({ investor, history, transactions, trades = []
                         <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value: any) => formatCurrency(Number(value))} />
+                    <Tooltip formatter={(value: number) => formatCurrency(value)} />
                     <Legend verticalAlign="bottom" height={36}/>
                   </PieChart>
                 </ResponsiveContainer>

@@ -10,9 +10,10 @@ interface DashboardStatsProps {
   history?: PeriodHistory[];
   isAdmin: boolean;
   onAddTransaction?: (t: Partial<Transaction>) => void;
+  brokerBalance?: number;
 }
 
-export function DashboardStats({ investors, transactions, trades = [], history = [], isAdmin, onAddTransaction }: DashboardStatsProps) {
+export function DashboardStats({ investors, transactions, trades = [], history = [], isAdmin, onAddTransaction, brokerBalance }: DashboardStatsProps) {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawNotes, setWithdrawNotes] = useState('');
@@ -23,6 +24,7 @@ export function DashboardStats({ investors, transactions, trades = [], history =
   const totalInvestors = investors.length;
 
   const managerWithdrawalTxs = transactions.filter(t => t.type === 'manager_withdrawal');
+  const investorWithdrawalTxs = transactions.filter(t => t.type === 'withdrawal');
   const managerWithdrawals = managerWithdrawalTxs.reduce((sum, t) => sum + t.amount, 0);
   const managerWalletBalance = investors.reduce((sum, inv) => sum + inv.feeCollected, 0) - managerWithdrawals;
 
@@ -40,9 +42,12 @@ export function DashboardStats({ investors, transactions, trades = [], history =
       onAddTransaction({
         type: 'manager_withdrawal',
         amount,
-        date: new Date().toISOString().split('T')[0],
+        date: new Date().toISOString(),
         status: 'completed',
-        notes: withdrawNotes || 'Dashboard Withdrawal'
+        notes: withdrawNotes || 'Dashboard Withdrawal',
+        referenceId: `TX-MGR-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+        method: 'Internal Transfer',
+        category: 'Internal'
       });
       setShowWithdrawModal(false);
       setWithdrawAmount('');
@@ -87,6 +92,14 @@ export function DashboardStats({ investors, transactions, trades = [], history =
   });
 
   const stats = [
+    {
+      title: "Broker Balance",
+      value: formatCurrency(brokerBalance || 0),
+      icon: Wallet,
+      color: "text-teal-600",
+      bg: "bg-teal-100",
+      show: isAdmin && (brokerBalance || 0) > 0
+    },
     {
       title: "Total Starting Capital",
       value: formatCurrency(totalCapital),
@@ -259,6 +272,55 @@ export function DashboardStats({ investors, transactions, trades = [], history =
                     </td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {isAdmin && investorWithdrawalTxs.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              <Users className="w-5 h-5 text-slate-400" />
+              Recent Investor Withdrawals
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs text-slate-500 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
+                <tr>
+                  <th className="px-6 py-4 font-medium">Date</th>
+                  <th className="px-6 py-4 font-medium">Investor</th>
+                  <th className="px-6 py-4 font-medium">Amount</th>
+                  <th className="px-6 py-4 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                {[...investorWithdrawalTxs].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5).map(tx => {
+                  const investor = investors.find(i => i.id === tx.investorId);
+                  return (
+                    <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                      <td className="px-6 py-4 text-slate-600 dark:text-slate-300">
+                        {new Date(tx.date).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">
+                        {investor?.investorName || 'Unknown'}
+                      </td>
+                      <td className="px-6 py-4 font-bold text-red-600 dark:text-red-400">
+                        -{formatCurrency(tx.amount)}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize 
+                          ${tx.status === 'pending' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' :
+                          tx.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 
+                          'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'}`}>
+                          {tx.status || 'completed'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

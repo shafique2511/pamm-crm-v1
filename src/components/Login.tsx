@@ -63,8 +63,8 @@ export function Login({ onLogin, onResetPassword }: LoginProps) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="bg-white max-w-md w-full rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4 transition-colors duration-300">
+      <div className="bg-white dark:bg-slate-900 max-w-md w-full rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
         <div className="bg-slate-900 p-8 text-center relative">
           {mode === 'forgot_password' && (
             <button 

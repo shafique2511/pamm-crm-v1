@@ -189,7 +189,7 @@ export function JournalView({ trades, onSyncMT5, totalCapital, readOnly }: { tra
                 <XAxis dataKey="date" stroke="#64748b" />
                 <YAxis tickFormatter={(val) => `$${val}`} stroke="#64748b" />
                 <Tooltip 
-                  formatter={(val: any, name: any) => [formatCurrency(Number(val)), String(name) === 'cumulative' ? 'Total Profit' : 'Profit']}
+                  formatter={(val: number, name: string) => [formatCurrency(val), name === 'cumulative' ? 'Total Profit' : 'Profit']}
                   labelFormatter={(label) => `Date: ${label}`}
                   contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
@@ -209,7 +209,7 @@ export function JournalView({ trades, onSyncMT5, totalCapital, readOnly }: { tra
                   <XAxis type="number" tickFormatter={(val) => `$${val}`} stroke="#64748b" />
                   <YAxis dataKey="name" type="category" stroke="#64748b" />
                   <Tooltip 
-                    formatter={(value: any) => formatCurrency(Number(value))}
+                    formatter={(value: number) => formatCurrency(value)}
                     contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   />
                   <Bar dataKey="value" radius={[0, 4, 4, 0]}>

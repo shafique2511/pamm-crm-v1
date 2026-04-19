@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { AuditLog } from '../types';
-import { Shield, Search, Filter, ArrowUpDown, Clock, User, Activity } from 'lucide-react';
+import { Shield, Search, Filter, ArrowUpDown, Clock, User, Activity, Trash2, Check, X } from 'lucide-react';
 
 type SortKey = keyof AuditLog;
 
-export function AuditLogView({ logs }: { logs: AuditLog[] }) {
+export function AuditLogView({ logs, onClearLogs }: { logs: AuditLog[], onClearLogs: () => void }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: 'asc' | 'desc' } | null>({ key: 'timestamp', direction: 'desc' });
+  const [showConfirmClear, setShowConfirmClear] = useState(false);
 
   const handleSort = (key: SortKey) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -62,6 +63,41 @@ export function AuditLogView({ logs }: { logs: AuditLog[] }) {
           </h2>
           <p className="text-slate-500 text-sm">Track system activities and user actions.</p>
         </div>
+
+        {logs.length > 0 && (
+          <div className="flex items-center gap-2">
+            {showConfirmClear ? (
+              <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4">
+                <span className="text-xs font-medium text-red-600">Are you sure?</span>
+                <button 
+                  onClick={() => {
+                    onClearLogs();
+                    setShowConfirmClear(false);
+                  }}
+                  className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors shadow-sm"
+                  title="Confirm Clear All"
+                >
+                  <Check className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => setShowConfirmClear(false)}
+                  className="p-2 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300 transition-colors"
+                  title="Cancel"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button 
+                onClick={() => setShowConfirmClear(true)}
+                className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm font-medium"
+              >
+                <Trash2 className="w-4 h-4" />
+                Clear Logs
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4 items-center justify-between">

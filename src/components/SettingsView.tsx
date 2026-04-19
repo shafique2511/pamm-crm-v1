@@ -239,16 +239,50 @@ export function SettingsView({ managers, onAddManager, onUpdateManager, onDelete
   };
 
   const copyMigrationSql = () => {
-    const migrationSql = `-- Run this in your Supabase SQL Editor if you are experiencing schema errors:
+    const migrationSql = `-- Run this in your Supabase SQL Editor to sync your database schema:
+
+-- 1. Managers Table Updates
 alter table managers add column if not exists "baseCurrency" text;
 alter table managers add column if not exists "investorGroups" jsonb;
 alter table managers add column if not exists "defaultInvestorGroup" text;
 alter table managers add column if not exists "feeTiers" jsonb;
 alter table managers add column if not exists "role" text;
 alter table managers add column if not exists "permissions" jsonb;
-alter table managers add column if not exists "enableIBModule" boolean;`;
+alter table managers add column if not exists "enableIBModule" boolean;
+alter table managers add column if not exists "allowInvestorWithdrawals" boolean;
+alter table managers add column if not exists "defaultFeePercentage" numeric;
+
+-- 2. Investors Table Updates
+alter table investors add column if not exists "status" text default 'active';
+alter table investors add column if not exists "group" text;
+alter table investors add column if not exists "joinedAt" text;
+alter table investors add column if not exists "baseCurrency" text;
+alter table investors add column if not exists "customFeePercentage" numeric;
+alter table investors add column if not exists "password" text;
+alter table investors add column if not exists "referredBy" text;
+alter table investors add column if not exists "ibCommissionRate" numeric;
+alter table investors add column if not exists "qrCode" text;
+alter table investors add column if not exists "bankAccount" text;
+
+-- 3. Transactions Table Updates
+alter table transactions add column if not exists "referenceId" text;
+alter table transactions add column if not exists "method" text;
+alter table transactions add column if not exists "category" text;
+alter table transactions add column if not exists "receiptUrl" text;
+
+-- 4. Trades Table Updates
+alter table trades add column if not exists sl numeric;
+alter table trades add column if not exists tp numeric;
+alter table trades add column if not exists "entryReason" text;
+alter table trades add column if not exists "exitReason" text;
+alter table trades add column if not exists notes text;
+
+-- 5. Ensure tables exist (General Setup)
+-- create table if not exists audit_logs (id text primary key, timestamp text, "userId" text, "userName" text, action text, details text, type text);
+-- create table if not exists period_history (id text primary key, date text, "totalProfit" numeric, "investorSnapshots" jsonb);
+`;
     navigator.clipboard.writeText(migrationSql);
-    alert('Migration SQL copied to clipboard! Paste it into the Supabase SQL Editor and run it.');
+    alert('Full Migration SQL copied to clipboard! Paste it into the Supabase SQL Editor to sync your records.');
   };
 
   return (
