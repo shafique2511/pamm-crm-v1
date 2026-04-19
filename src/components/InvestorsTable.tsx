@@ -75,8 +75,8 @@ export function InvestorsTable({ investors, availableGroups, enableIBModule, onU
         const newCap = Number(value) || 0;
         updates.endingCapital = newCap + (prev.netProfit || 0) - (prev.cashPayout || 0);
         
-        // If HWM is 0 or less than the new starting capital and they have no profit yet, sync it.
-        if (prev.highWaterMark === 0 || (prev.highWaterMark < newCap && (!prev.netProfit || prev.netProfit === 0))) {
+        const hwm = prev.highWaterMark ?? 0;
+        if (hwm === 0 || (hwm < newCap && (!prev.netProfit || prev.netProfit === 0))) {
           updates.highWaterMark = newCap;
         }
       }

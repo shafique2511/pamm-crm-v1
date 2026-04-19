@@ -141,7 +141,7 @@ export function ReportsView({ investors, transactions }: { investors: Investor[]
                   <XAxis type="number" tickFormatter={(val) => `$${val / 1000}k`} stroke="#64748b" />
                   <YAxis dataKey="name" type="category" width={100} stroke="#64748b" />
                   <Tooltip 
-                    formatter={(value: number) => formatCurrency(value)}
+                    formatter={(value: any) => formatCurrency(Number(value))}
                     contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   />
                   <Bar dataKey="value" radius={[0, 4, 4, 0]}>

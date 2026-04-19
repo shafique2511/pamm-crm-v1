@@ -237,7 +237,7 @@ export function InvestorDashboard({ investor, history, transactions, trades = []
                 <XAxis dataKey="date" stroke="#64748b" />
                 <YAxis tickFormatter={(val) => `$${val}`} stroke="#64748b" />
                 <Tooltip 
-                  formatter={(val: number) => formatCurrency(val)}
+                  formatter={(val: any) => formatCurrency(Number(val))}
                   contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
                 <Line type="monotone" dataKey="capital" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
@@ -270,7 +270,7 @@ export function InvestorDashboard({ investor, history, transactions, trades = []
                         <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                    <Tooltip formatter={(value: any) => formatCurrency(Number(value))} />
                     <Legend verticalAlign="bottom" height={36}/>
                   </PieChart>
                 </ResponsiveContainer>
