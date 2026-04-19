@@ -12,6 +12,7 @@ import { InvestorDashboard } from './components/InvestorDashboard';
 import { AffiliatesView } from './components/AffiliatesView';
 import { AuditLogView } from './components/AuditLogView';
 import { ManagerProfileView } from './components/ManagerProfileView';
+import { InvestorProfileView } from './components/InvestorProfileView';
 import { AddInvestorModal } from './components/AddInvestorModal';
 import { Investor, Manager, Transaction, Trade, PeriodHistory, AuditLog } from './types';
 import { Plus, Calculator, Database, Copy, CheckCircle2, Menu, Search, Filter } from 'lucide-react';
@@ -945,10 +946,21 @@ create table if not exists audit_logs (
                     onUpdateInvestor={handleUpdateInvestor}
                     onAddTransaction={handleAddTransaction}
                     allowWithdrawals={managers[0]?.allowInvestorWithdrawals || false}
+                    showJournalVisibility={managers[0]?.showJournalToInvestors || false}
+                    managerInfo={managers[0] ? { mt5Server: managers[0].mt5Server, mt5Login: managers[0].mt5Login } : undefined}
                   />
                 )
               )}
             </>
+          )}
+
+          {activeTab === 'profile' && !isAdmin && currentInvestor && (
+            <InvestorProfileView 
+              investor={currentInvestor}
+              transactions={transactions}
+              trades={trades}
+              onUpdateInvestor={handleUpdateInvestor}
+            />
           )}
 
           {activeTab === 'investors' && (

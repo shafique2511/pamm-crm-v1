@@ -41,7 +41,7 @@ export function Sidebar({ activeTab, setActiveTab, isAdmin, managerRole, permiss
     { id: 'reports', label: 'Reports', icon: PieChart, show: isAdmin && hasPermission('canViewReports', true) },
     { id: 'audit', label: 'Audit Logs', icon: Shield, show: isAdmin && hasPermission('canViewAudit', managerRole === 'admin') },
     { id: 'settings', label: 'Settings', icon: Settings, show: isAdmin && hasPermission('canManageSettings', managerRole === 'admin') },
-    { id: 'profile', label: 'My Profile', icon: User, show: isAdmin },
+    { id: 'profile', label: 'My Profile', icon: User, show: true },
   ].filter(item => item.show);
 
   return (

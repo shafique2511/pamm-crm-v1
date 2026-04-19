@@ -8,6 +8,7 @@ export interface FeeTier {
 export interface Investor {
   id: string;
   investorName: string;
+  email?: string;
   password?: string;
   group?: string;
   baseCurrency?: string;
@@ -29,6 +30,7 @@ export interface Investor {
   endingCapital: number;
   qrCode: string;
   bankAccount: string;
+  phone?: string;
   feeCollected: number;
   unpaidFee: number;
 }
@@ -60,6 +62,7 @@ export interface Manager {
   defaultInvestorGroup?: string;
   enableIBModule?: boolean;
   allowInvestorWithdrawals?: boolean;
+  showJournalToInvestors?: boolean;
   feeTiers?: FeeTier[];
   defaultFeePercentage?: number;
 }

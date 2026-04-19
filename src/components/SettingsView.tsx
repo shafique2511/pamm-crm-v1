@@ -31,6 +31,9 @@ export function SettingsView({ managers, onAddManager, onUpdateManager, onDelete
   // Investor Withdrawals Setting
   const [allowInvestorWithdrawals, setAllowInvestorWithdrawals] = useState(mainManager?.allowInvestorWithdrawals || false);
 
+  // Trading Journal visibility for investors
+  const [showJournalToInvestors, setShowJournalToInvestors] = useState(mainManager?.showJournalToInvestors || false);
+
   // Default Fee Setting
   const [defaultFee, setDefaultFee] = useState(mainManager?.defaultFeePercentage ?? 20);
 
@@ -128,6 +131,14 @@ export function SettingsView({ managers, onAddManager, onUpdateManager, onDelete
     setAllowInvestorWithdrawals(newValue);
     if (mainManager) {
       onUpdateManager(mainManager.id, { allowInvestorWithdrawals: newValue });
+    }
+  };
+
+  const handleToggleJournalVisibility = () => {
+    const newValue = !showJournalToInvestors;
+    setShowJournalToInvestors(newValue);
+    if (mainManager) {
+      onUpdateManager(mainManager.id, { showJournalToInvestors: newValue });
     }
   };
 
@@ -250,6 +261,7 @@ alter table managers add column if not exists "role" text;
 alter table managers add column if not exists "permissions" jsonb;
 alter table managers add column if not exists "enableIBModule" boolean;
 alter table managers add column if not exists "allowInvestorWithdrawals" boolean;
+alter table managers add column if not exists "showJournalToInvestors" boolean;
 alter table managers add column if not exists "defaultFeePercentage" numeric;
 
 -- 2. Investors Table Updates
@@ -263,6 +275,7 @@ alter table investors add column if not exists "referredBy" text;
 alter table investors add column if not exists "ibCommissionRate" numeric;
 alter table investors add column if not exists "qrCode" text;
 alter table investors add column if not exists "bankAccount" text;
+alter table investors add column if not exists "phone" text;
 
 -- 3. Transactions Table Updates
 alter table transactions add column if not exists "referenceId" text;
@@ -425,6 +438,27 @@ alter table trades add column if not exists comment text;
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${allowInvestorWithdrawals ? 'bg-blue-500' : 'bg-slate-300'}`}
           >
             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${allowInvestorWithdrawals ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* Trading Journal Visibility Toggle */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-100 rounded-lg">
+              <Server className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Investor Trading Journal</h3>
+              <p className="text-sm text-slate-500">Enable or disable the trading history view for all investors.</p>
+            </div>
+          </div>
+          <button 
+            onClick={handleToggleJournalVisibility}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${showJournalToInvestors ? 'bg-indigo-500' : 'bg-slate-300'}`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${showJournalToInvestors ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
         </div>
       </div>
