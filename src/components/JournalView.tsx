@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Trade } from '../types';
 import { formatCurrency } from '../lib/utils';
-import { RefreshCw, BookOpen, ArrowUpRight, ArrowDownRight, Search, TrendingUp, TrendingDown, Target, AlertCircle, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import { RefreshCw, BookOpen, ArrowUpRight, ArrowDownRight, Search, TrendingUp, TrendingDown, Target, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Download } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 export function JournalView({ trades, onSyncMT5, totalCapital, readOnly }: { trades: Trade[], onSyncMT5: () => Promise<{success: boolean, count: number, error?: string}>, totalCapital: number, readOnly?: boolean }) {
@@ -14,6 +14,7 @@ export function JournalView({ trades, onSyncMT5, totalCapital, readOnly }: { tra
   const [profitRange, setProfitRange] = useState<'all' | '>1000' | '>0' | '<0' | '<-1000'>('all');
   const [syncStatus, setSyncStatus] = useState<{message: string, type: 'success'|'error'} | null>(null);
   const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const handleSync = async () => {
     setIsSyncing(true);
@@ -28,6 +29,42 @@ export function JournalView({ trades, onSyncMT5, totalCapital, readOnly }: { tra
     
     setIsSyncing(false);
     setTimeout(() => setSyncStatus(null), 5000);
+  };
+
+  const handleExportCSV = () => {
+    setIsExporting(true);
+    try {
+      const headers = ['Ticket', 'Open Time', 'Close Time', 'Symbol', 'Type', 'Volume', 'Open Price', 'Close Price', 'Profit', 'Commission', 'Swap', 'Net Profit', 'Comment'];
+      const rows = filteredTrades.map(t => [
+        t.ticket,
+        t.openTime,
+        t.closeTime,
+        t.symbol,
+        t.type,
+        t.volume,
+        t.openPrice,
+        t.closePrice,
+        t.profit,
+        t.commission || 0,
+        t.swap || 0,
+        t.profit + (t.commission || 0) + (t.swap || 0),
+        `"${(t.comment || '').replace(/"/g, '""')}"`
+      ]);
+
+      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `trading_journal_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (e) {
+      console.error('Export failed', e);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const filteredTrades = trades.filter(t => {
@@ -56,6 +93,16 @@ export function JournalView({ trades, onSyncMT5, totalCapital, readOnly }: { tra
   const totalProfit = filteredTrades.reduce((sum, t) => sum + t.profit, 0);
   const winRate = filteredTrades.length > 0 
     ? (filteredTrades.filter(t => t.profit > 0).length / filteredTrades.length) * 100 
+    : 0;
+
+  const winningTrades = filteredTrades.filter(t => t.profit > 0);
+  const losingTrades = filteredTrades.filter(t => t.profit <= 0);
+
+  const avgWin = winningTrades.length > 0 
+    ? winningTrades.reduce((sum, t) => sum + t.profit, 0) / winningTrades.length 
+    : 0;
+  const avgLoss = losingTrades.length > 0 
+    ? losingTrades.reduce((sum, t) => sum + Math.abs(t.profit), 0) / losingTrades.length 
     : 0;
 
   const grossProfit = filteredTrades.filter(t => t.profit > 0).reduce((sum, t) => sum + t.profit, 0);
@@ -101,6 +148,14 @@ export function JournalView({ trades, onSyncMT5, totalCapital, readOnly }: { tra
           <p className="text-slate-500 text-sm">Sync and review your MetaTrader 5 history</p>
         </div>
         <div className="flex items-center gap-4">
+          <button 
+            onClick={handleExportCSV}
+            disabled={isExporting || filteredTrades.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors shadow-sm text-sm font-medium"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
           {syncStatus && (
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium ${syncStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
               {syncStatus.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
@@ -162,6 +217,20 @@ export function JournalView({ trades, onSyncMT5, totalCapital, readOnly }: { tra
             <p className="text-sm font-medium text-slate-500">Gross Loss</p>
           </div>
           <p className="text-2xl font-bold text-red-600">-{formatCurrency(grossLoss)}</p>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <div className="flex items-center gap-2 mb-1">
+            <ArrowUpRight className="w-4 h-4 text-green-500" />
+            <p className="text-sm font-medium text-slate-500">Avg Win</p>
+          </div>
+          <p className="text-2xl font-bold text-green-600">{formatCurrency(avgWin)}</p>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <div className="flex items-center gap-2 mb-1">
+            <ArrowDownRight className="w-4 h-4 text-red-500" />
+            <p className="text-sm font-medium text-slate-500">Avg Loss</p>
+          </div>
+          <p className="text-2xl font-bold text-red-600">-{formatCurrency(avgLoss)}</p>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
           <div className="flex items-center gap-2 mb-1">
@@ -302,7 +371,7 @@ export function JournalView({ trades, onSyncMT5, totalCapital, readOnly }: { tra
                 <th className="px-4 py-3">Volume</th>
                 <th className="px-4 py-3">Open Price</th>
                 <th className="px-4 py-3">Close Price</th>
-                <th className="px-4 py-3 text-right">Profit</th>
+                <th className="px-4 py-3 text-right">Net Profit</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -328,14 +397,42 @@ export function JournalView({ trades, onSyncMT5, totalCapital, readOnly }: { tra
                     <td className="px-4 py-3">{t.volume.toFixed(2)}</td>
                     <td className="px-4 py-3 font-mono">{t.openPrice.toFixed(5)}</td>
                     <td className="px-4 py-3 font-mono">{t.closePrice.toFixed(5)}</td>
-                    <td className={`px-4 py-3 text-right font-medium ${t.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(t.profit)}
+                    <td className={`px-4 py-3 text-right font-medium ${t.profit + (t.commission || 0) + (t.swap || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(t.profit + (t.commission || 0) + (t.swap || 0))}
                     </td>
                   </tr>
                   {expandedTradeId === t.id && (
                     <tr className="bg-slate-50 border-b border-slate-200">
                       <td colSpan={10} className="px-4 py-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                          <div className="bg-white p-3 rounded-lg border border-slate-200">
+                            <span className="block text-xs font-medium text-slate-500 mb-1">Commission</span>
+                            <span className="text-slate-900">{t.commission !== undefined ? formatCurrency(t.commission) : '0.00'}</span>
+                          </div>
+                          <div className="bg-white p-3 rounded-lg border border-slate-200">
+                            <span className="block text-xs font-medium text-slate-500 mb-1">Swap</span>
+                            <span className="text-slate-900">{t.swap !== undefined ? formatCurrency(t.swap) : '0.00'}</span>
+                          </div>
+                          <div className="bg-white p-3 rounded-lg border border-slate-200">
+                            <span className="block text-xs font-medium text-slate-500 mb-1">Pips</span>
+                            <span className={`font-semibold ${t.pips && t.pips >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {t.pips !== undefined ? t.pips.toFixed(1) : 'N/A'}
+                            </span>
+                          </div>
+                          <div className="bg-white p-3 rounded-lg border border-slate-200">
+                            <span className="block text-xs font-medium text-slate-500 mb-1">Duration</span>
+                            <span className="text-slate-900">
+                              {Math.floor((new Date(t.closeTime).getTime() - new Date(t.openTime).getTime()) / 60000)}m
+                            </span>
+                          </div>
+                          <div className="bg-white p-3 rounded-lg border border-slate-200">
+                            <span className="block text-xs font-medium text-slate-500 mb-1">Comment</span>
+                            <span className="text-slate-900">{t.comment || 'N/A'}</span>
+                          </div>
+                          <div className="bg-white p-3 rounded-lg border border-slate-200">
+                            <span className="block text-xs font-medium text-slate-500 mb-1">Magic Number</span>
+                            <span className="text-slate-900">{t.magic || 'Manual'}</span>
+                          </div>
                           <div className="bg-white p-3 rounded-lg border border-slate-200">
                             <span className="block text-xs font-medium text-slate-500 mb-1">Stop Loss (SL)</span>
                             <span className="font-mono text-slate-900">{t.sl ? t.sl.toFixed(5) : 'Not Set'}</span>

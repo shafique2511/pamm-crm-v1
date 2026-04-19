@@ -95,6 +95,11 @@ export interface Trade {
   openPrice: number;
   closePrice: number;
   profit: number;
+  commission?: number;
+  swap?: number;
+  pips?: number;
+  magic?: number;
+  comment?: string;
   sl?: number;
   tp?: number;
   entryReason?: string;
