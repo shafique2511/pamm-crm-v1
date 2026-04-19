@@ -99,11 +99,28 @@ export function InvestorDashboard({
         logging: false,
         backgroundColor: '#ffffff',
         onclone: (clonedDoc, element) => {
-          // Force background to white and apply legacy color overrides for the capture target
           if (element) {
             element.classList.add('pdf-capture');
             element.style.backgroundColor = '#ffffff';
-            element.style.padding = '20px'; // Add some padding for the PDF
+            element.style.padding = '20px';
+            
+            // Recursively transform all elements in the clone to convert oklch to a format html2canvas understands
+            const allElements = element.getElementsByTagName('*');
+            for (let i = 0; i < allElements.length; i++) {
+              const el = allElements[i] as HTMLElement;
+              const style = clonedDoc.defaultView?.getComputedStyle(el);
+              if (style) {
+                // Check common color properties
+                ['color', 'backgroundColor', 'borderColor', 'outlineColor', 'stopColor', 'fill', 'stroke'].forEach(prop => {
+                  const val = style.getPropertyValue(prop);
+                  if (val && val.includes('oklch')) {
+                    // Force standard colors as fallbacks for specific properties if detected
+                    // This is a brutal but effective bypass for html2canvas oklch parsing
+                    el.style.setProperty(prop, val.replace(/oklch\([^)]+\)/g, '#334155'), 'important');
+                  }
+                });
+              }
+            }
           }
         }
       });
