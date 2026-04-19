@@ -8,12 +8,16 @@ export interface FeeTier {
 export interface Investor {
   id: string;
   investorName: string;
-  email?: string;
   password?: string;
   group?: string;
   baseCurrency?: string;
   status?: 'active' | 'suspended' | 'closed';
   joinedAt?: string;
+  email?: string;
+  phone?: string;
+  country?: string;
+  memberTier?: string;
+  emailNotifications?: boolean;
   highWaterMark: number;
   startingCapital: number;
   lossCarryover: number;
@@ -30,7 +34,6 @@ export interface Investor {
   endingCapital: number;
   qrCode: string;
   bankAccount: string;
-  phone?: string;
   feeCollected: number;
   unpaidFee: number;
 }
@@ -62,9 +65,11 @@ export interface Manager {
   defaultInvestorGroup?: string;
   enableIBModule?: boolean;
   allowInvestorWithdrawals?: boolean;
-  showJournalToInvestors?: boolean;
+  showTradingJournalToInvestors?: boolean;
   feeTiers?: FeeTier[];
   defaultFeePercentage?: number;
+  brandName?: string;
+  supportEmail?: string;
 }
 
 export interface Transaction {
@@ -98,11 +103,6 @@ export interface Trade {
   openPrice: number;
   closePrice: number;
   profit: number;
-  commission?: number;
-  swap?: number;
-  pips?: number;
-  magic?: number;
-  comment?: string;
   sl?: number;
   tp?: number;
   entryReason?: string;

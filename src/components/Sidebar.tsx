@@ -36,7 +36,7 @@ export function Sidebar({ activeTab, setActiveTab, isAdmin, managerRole, permiss
     { id: 'investors', label: isAdmin ? 'Investors' : 'Statements', icon: Users, show: true },
     { id: 'transactions', label: 'Transactions', icon: ArrowRightLeft, show: isAdmin && hasPermission('canManageTransactions', true) },
     { id: 'manager_withdrawals', label: 'Manager Withdrawals', icon: ArrowRightLeft, show: isAdmin && hasPermission('canManageWithdrawals', managerRole !== 'read_only') },
-    { id: 'journal', label: 'Trading Journal', icon: BookOpen, show: isAdmin && hasPermission('canSyncMT5', true) },
+    { id: 'journal', label: 'Trading Journal', icon: BookOpen, show: (isAdmin && hasPermission('canSyncMT5', true)) || (!isAdmin && permissions?.showTradingJournalToInvestors) },
     { id: 'affiliates', label: 'IB Affiliates', icon: Users, show: enableIBModule && isAdmin && hasPermission('canViewAffiliates', true) },
     { id: 'reports', label: 'Reports', icon: PieChart, show: isAdmin && hasPermission('canViewReports', true) },
     { id: 'audit', label: 'Audit Logs', icon: Shield, show: isAdmin && hasPermission('canViewAudit', managerRole === 'admin') },

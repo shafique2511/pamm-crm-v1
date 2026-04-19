@@ -69,17 +69,13 @@ export function DashboardStats({ investors, transactions, trades = [], history =
     : 'N/A';
 
   // Advanced Trading Analytics
-  const winningTrades = trades.filter(t => (t.profit + (t.commission || 0) + (t.swap || 0)) > 0);
-  const losingTrades = trades.filter(t => (t.profit + (t.commission || 0) + (t.swap || 0)) < 0);
+  const winningTrades = trades.filter(t => t.profit > 0);
+  const losingTrades = trades.filter(t => t.profit < 0);
   const winRate = trades.length > 0 ? (winningTrades.length / trades.length) * 100 : 0;
   
-  const netGrossProfit = winningTrades.reduce((sum, t) => sum + (t.profit + (t.commission || 0) + (t.swap || 0)), 0);
-  const netGrossLoss = Math.abs(losingTrades.reduce((sum, t) => sum + (t.profit + (t.commission || 0) + (t.swap || 0)), 0));
-  const profitFactor = netGrossLoss > 0 ? (netGrossProfit / netGrossLoss) : (netGrossProfit > 0 ? 999 : 0);
-
-  const avgWin = winningTrades.length > 0 ? netGrossProfit / winningTrades.length : 0;
-  const avgLoss = losingTrades.length > 0 ? netGrossLoss / losingTrades.length : 0;
-  const expectancy = trades.length > 0 ? (netGrossProfit - netGrossLoss) / trades.length : 0;
+  const grossProfit = winningTrades.reduce((sum, t) => sum + t.profit, 0);
+  const grossLoss = Math.abs(losingTrades.reduce((sum, t) => sum + t.profit, 0));
+  const profitFactor = grossLoss > 0 ? (grossProfit / grossLoss) : (grossProfit > 0 ? 999 : 0);
 
   // Approximate Max Drawdown from Period History
   let peak = 0;
@@ -145,7 +141,7 @@ export function DashboardStats({ investors, transactions, trades = [], history =
       show: isAdmin && trades.length > 0
     },
     {
-      title: "Net Profit Factor",
+      title: "Profit Factor",
       value: profitFactor === 999 ? '∞' : profitFactor.toFixed(2),
       icon: TrendingUp,
       color: "text-fuchsia-600",
@@ -153,40 +149,16 @@ export function DashboardStats({ investors, transactions, trades = [], history =
       show: isAdmin && trades.length > 0
     },
     {
-      title: "Avg Win (Net)",
-      value: formatCurrency(avgWin),
-      icon: TrendingUp,
-      color: "text-emerald-600",
-      bg: "bg-emerald-100",
-      show: isAdmin && trades.length > 0
-    },
-    {
-      title: "Avg Loss (Net)",
-      value: `-${formatCurrency(avgLoss)}`,
-      icon: TrendingDown,
-      color: "text-rose-600",
-      bg: "bg-rose-100",
-      show: isAdmin && trades.length > 0
-    },
-    {
-      title: "Expectancy",
-      value: formatCurrency(expectancy),
-      icon: Target,
-      color: "text-blue-600",
-      bg: "bg-blue-100",
-      show: isAdmin && trades.length > 0
-    },
-    {
-      title: "Gross Profit (Net)",
-      value: formatCurrency(netGrossProfit),
+      title: "Gross Profit",
+      value: formatCurrency(grossProfit),
       icon: TrendingUp,
       color: "text-green-600",
       bg: "bg-green-100",
       show: isAdmin && trades.length > 0
     },
     {
-      title: "Gross Loss (Net)",
-      value: `-${formatCurrency(netGrossLoss)}`,
+      title: "Gross Loss",
+      value: `-${formatCurrency(grossLoss)}`,
       icon: TrendingDown,
       color: "text-red-600",
       bg: "bg-red-100",

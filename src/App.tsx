@@ -9,10 +9,10 @@ import { TransactionsView } from './components/TransactionsView';
 import { ManagerWithdrawalsView } from './components/ManagerWithdrawalsView';
 import { JournalView } from './components/JournalView';
 import { InvestorDashboard } from './components/InvestorDashboard';
+import { InvestorProfileView } from './components/InvestorProfileView';
 import { AffiliatesView } from './components/AffiliatesView';
 import { AuditLogView } from './components/AuditLogView';
 import { ManagerProfileView } from './components/ManagerProfileView';
-import { InvestorProfileView } from './components/InvestorProfileView';
 import { AddInvestorModal } from './components/AddInvestorModal';
 import { Investor, Manager, Transaction, Trade, PeriodHistory, AuditLog } from './types';
 import { Plus, Calculator, Database, Copy, CheckCircle2, Menu, Search, Filter } from 'lucide-react';
@@ -385,11 +385,6 @@ export default function App() {
         openPrice: 1.08500,
         closePrice: 1.08950,
         profit: 675.00,
-        commission: -12.00,
-        swap: -5.50,
-        pips: 45.0,
-        magic: 123456,
-        comment: 'Grid EA V1',
         sl: 1.08000,
         tp: 1.09500,
         entryReason: 'MACD Crossover',
@@ -407,11 +402,6 @@ export default function App() {
         openPrice: 1.26500,
         closePrice: 1.26800,
         profit: -600.00,
-        commission: -16.00,
-        swap: 0,
-        pips: -30.0,
-        magic: 0,
-        comment: 'Manual Trade',
         sl: 1.26800,
         tp: 1.25500,
         entryReason: 'Resistance Rejection',
@@ -429,11 +419,6 @@ export default function App() {
         openPrice: 2020.50,
         closePrice: 2025.00,
         profit: 225.00,
-        commission: -5.00,
-        swap: -1.20,
-        pips: 45.0,
-        magic: 789012,
-        comment: 'Scalper EA',
         sl: 2015.00,
         tp: 2030.00,
         entryReason: 'Support Bounce',
@@ -449,6 +434,19 @@ export default function App() {
     }
 
     return { success: true, count: mockTrades.length };
+  };
+
+  const handleUpdateTrade = async (id: string, updates: Partial<Trade>) => {
+    const trade = trades.find(t => t.id === id);
+    setTrades(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    logAction('update', `Updated trade ${trade?.ticket || id}`, 'trade');
+    if (supabase) {
+      try {
+        await supabase.from('trades').update(updates).eq('id', id);
+      } catch (e) {
+        console.error("Failed to update trade", e);
+      }
+    }
   };
 
   const calculatePeriod = async () => {
@@ -583,13 +581,21 @@ export default function App() {
 -- alter table investors add column if not exists "customFeePercentage" numeric;
 -- alter table investors add column if not exists "referredBy" text;
 -- alter table investors add column if not exists "ibCommissionRate" numeric;
+-- alter table investors add column if not exists "phone" text;
+-- alter table investors add column if not exists "email" text;
+-- alter table investors add column if not exists "country" text;
+-- alter table investors add column if not exists "memberTier" text;
+-- alter table investors add column if not exists "emailNotifications" boolean;
 -- alter table managers add column if not exists "allowInvestorWithdrawals" boolean;
 -- alter table managers add column if not exists "defaultFeePercentage" numeric;
--- alter table trades add column if not exists commission numeric;
--- alter table trades add column if not exists swap numeric;
--- alter table trades add column if not exists pips numeric;
--- alter table trades add column if not exists magic numeric;
--- alter table trades add column if not exists comment text;
+-- alter table managers add column if not exists "showTradingJournalToInvestors" boolean;
+-- alter table managers add column if not exists "brandName" text;
+-- alter table managers add column if not exists "supportEmail" text;
+-- alter table managers add column if not exists "baseCurrency" text;
+-- alter table managers add column if not exists "investorGroups" jsonb;
+-- alter table managers add column if not exists "defaultInvestorGroup" text;
+-- alter table managers add column if not exists "feeTiers" jsonb;
+-- alter table managers add column if not exists "enableIBModule" boolean;
 
 create table if not exists investors (
   id uuid default gen_random_uuid() primary key,
@@ -598,6 +604,11 @@ create table if not exists investors (
   "group" text,
   "status" text default 'active',
   "joinedAt" text,
+  "email" text,
+  "phone" text,
+  "country" text,
+  "memberTier" text,
+  "emailNotifications" boolean,
   "baseCurrency" text,
   "highWaterMark" numeric,
   "startingCapital" numeric,
@@ -636,7 +647,10 @@ create table if not exists managers (
   "permissions" jsonb,
   "enableIBModule" boolean,
   "allowInvestorWithdrawals" boolean,
-  "defaultFeePercentage" numeric
+  "showTradingJournalToInvestors" boolean,
+  "defaultFeePercentage" numeric,
+  "brandName" text,
+  "supportEmail" text
 );
 
 create table if not exists transactions (
@@ -664,11 +678,6 @@ create table if not exists trades (
   "openPrice" numeric,
   "closePrice" numeric,
   profit numeric,
-  commission numeric,
-  swap numeric,
-  pips numeric,
-  magic numeric,
-  comment text,
   sl numeric,
   tp numeric,
   "entryReason" text,
@@ -874,7 +883,7 @@ create table if not exists audit_logs (
           setActiveTab={(tab) => { setActiveTab(tab); setIsSidebarOpen(false); }} 
           isAdmin={isAdmin}
           managerRole={user?.managerRole}
-          permissions={user?.permissions}
+          permissions={isAdmin ? user?.permissions : { showTradingJournalToInvestors: managers[0]?.showTradingJournalToInvestors }}
           enableIBModule={managers[0]?.enableIBModule || false}
           onLogout={() => setUser(null)}
         />
@@ -946,21 +955,11 @@ create table if not exists audit_logs (
                     onUpdateInvestor={handleUpdateInvestor}
                     onAddTransaction={handleAddTransaction}
                     allowWithdrawals={managers[0]?.allowInvestorWithdrawals || false}
-                    showJournalVisibility={managers[0]?.showJournalToInvestors || false}
-                    managerInfo={managers[0] ? { mt5Server: managers[0].mt5Server, mt5Login: managers[0].mt5Login } : undefined}
+                    showTradingJournal={managers[0]?.showTradingJournalToInvestors || false}
                   />
                 )
               )}
             </>
-          )}
-
-          {activeTab === 'profile' && !isAdmin && currentInvestor && (
-            <InvestorProfileView 
-              investor={currentInvestor}
-              transactions={transactions}
-              trades={trades}
-              onUpdateInvestor={handleUpdateInvestor}
-            />
           )}
 
           {activeTab === 'investors' && (
@@ -1111,12 +1110,13 @@ create table if not exists audit_logs (
             />
           )}
 
-          {activeTab === 'journal' && isAdmin && (
+          {activeTab === 'journal' && (isAdmin || managers[0]?.showTradingJournalToInvestors) && (
             <JournalView 
               trades={trades} 
               onSyncMT5={handleSyncMT5} 
+              onUpdateTrade={handleUpdateTrade}
               totalCapital={investors.reduce((sum, inv) => sum + inv.startingCapital, 0)}
-              readOnly={isReadOnly('canSyncMT5')}
+              readOnly={!isAdmin || isReadOnly('canSyncMT5')}
             />
           )}
 
@@ -1136,15 +1136,22 @@ create table if not exists audit_logs (
             <AuditLogView logs={auditLogs} onClearLogs={handleClearAuditLogs} />
           )}
 
-          {activeTab === 'profile' && isAdmin && user?.managerRole && (
-            <ManagerProfileView 
-              manager={managers.find(m => m.username === user.name) || managers[0]}
-              investors={investors}
-              transactions={transactions}
-              trades={trades}
-              auditLogs={auditLogs}
-              onUpdateManager={handleUpdateManager}
-            />
+          {activeTab === 'profile' && (
+            isAdmin && user?.managerRole ? (
+              <ManagerProfileView 
+                manager={managers.find(m => m.username === user.name) || managers[0]}
+                investors={investors}
+                transactions={transactions}
+                trades={trades}
+                auditLogs={auditLogs}
+                onUpdateManager={handleUpdateManager}
+              />
+            ) : currentInvestor ? (
+              <InvestorProfileView 
+                investor={currentInvestor}
+                onUpdateInvestor={handleUpdateInvestor}
+              />
+            ) : null
           )}
 
           {activeTab === 'settings' && isAdmin && hasPermission('canManageSettings', user.managerRole === 'admin') && (

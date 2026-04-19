@@ -1,65 +1,19 @@
 import React, { useRef, useState } from 'react';
 import { Investor, PeriodHistory, Transaction, Trade } from '../types';
-import { formatCurrency as globalFormatCurrency, evaluatePasswordStrength, hashPassword } from '../lib/utils';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, Shield, ArrowRightLeft, Percent, AlertCircle, CheckCircle2, PieChart as PieChartIcon, Download, Loader2, Key } from 'lucide-react';
+import { formatCurrency as globalFormatCurrency } from '../lib/utils';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { TrendingUp, TrendingDown, DollarSign, Shield, ArrowRightLeft, Percent, PieChart as PieChartIcon, Download, Loader2, ArrowUpRight, ArrowDownRight, Activity } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
-export function InvestorDashboard({ 
-  investor, 
-  history, 
-  transactions, 
-  trades = [], 
-  onUpdateInvestor, 
-  onAddTransaction, 
-  allowWithdrawals,
-  showJournalVisibility = false,
-  managerInfo
-}: { 
-  investor: Investor, 
-  history: PeriodHistory[], 
-  transactions: Transaction[], 
-  trades?: Trade[], 
-  onUpdateInvestor?: (id: string, updates: Partial<Investor>) => void, 
-  onAddTransaction?: (t: Partial<Transaction>) => void, 
-  allowWithdrawals?: boolean,
-  showJournalVisibility?: boolean,
-  managerInfo?: { mt5Server?: string, mt5Login?: string, mt5Password?: string }
-}) {
+export function InvestorDashboard({ investor, history, transactions, trades = [], onAddTransaction, allowWithdrawals, showTradingJournal }: { investor: Investor, history: PeriodHistory[], transactions: Transaction[], trades?: Trade[], onUpdateInvestor?: (id: string, updates: Partial<Investor>) => void, onAddTransaction?: (t: Partial<Transaction>) => void, allowWithdrawals?: boolean, showTradingJournal?: boolean }) {
   const formatCurrency = (value: number) => globalFormatCurrency(value, investor.baseCurrency);
 
   const dashboardRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [passwordMessage, setPasswordMessage] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawNotes, setWithdrawNotes] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-
-  // Advanced Stats
-  const winningTrades = trades.filter(t => (t.profit + (t.commission || 0) + (t.swap || 0)) > 0);
-  const losingTrades = trades.filter(t => (t.profit + (t.commission || 0) + (t.swap || 0)) < 0);
-  const bestTrade = trades.length > 0 ? Math.max(...trades.map(t => t.profit + (t.commission || 0) + (t.swap || 0))) : 0;
-  const worstTrade = trades.length > 0 ? Math.min(...trades.map(t => t.profit + (t.commission || 0) + (t.swap || 0))) : 0;
-
-  const systemNetGrossProfit = winningTrades.reduce((sum, t) => sum + (t.profit + (t.commission || 0) + (t.swap || 0)), 0);
-  const systemNetGrossLoss = Math.abs(losingTrades.reduce((sum, t) => sum + (t.profit + (t.commission || 0) + (t.swap || 0)), 0));
-  const systemProfitFactor = systemNetGrossLoss > 0 ? (systemNetGrossProfit / systemNetGrossLoss) : (systemNetGrossProfit > 0 ? Infinity : 0);
-  const avgWin = winningTrades.length > 0 ? systemNetGrossProfit / winningTrades.length : 0;
-  const avgLoss = losingTrades.length > 0 ? systemNetGrossLoss / losingTrades.length : 0;
-
-  // Monthly Performance Estimation
-  const last30Days = trades.filter(t => new Date(t.closeTime) > new Date(Date.now() - 30 * 86400000));
-  const monthlyProfit = last30Days.reduce((sum, t) => sum + (t.profit + (t.commission || 0) + (t.swap || 0)), 0);
-  
-  // Account Information Details
-  const accountDetails = [
-    { label: 'Broker Server', value: managerInfo?.mt5Server || 'PAMM-Live-01' },
-    { label: 'Login ID', value: investor.id.split('-')[0].toUpperCase() }, // Using part of ID as unique login
-    { label: 'Account Type', value: investor.group || 'Standard' },
-    { label: 'Base Currency', value: investor.baseCurrency || 'USD' },
-  ];
 
   // Prepare chart data
   const chartData = [...history].reverse().map(h => {
@@ -80,13 +34,12 @@ export function InvestorDashboard({
   const roi = investor.startingCapital > 0 ? (investor.netProfit / investor.startingCapital) * 100 : 0;
   const distanceToHWM = investor.endingCapital - investor.highWaterMark;
 
-  // Profit Breakdown Data
-  const profitBreakdownData = [
-    { name: 'Your Net Profit', value: Math.max(0, investor.netProfit) },
-    { name: 'Manager Fee', value: Math.max(0, investor.yourFee) }
-  ].filter(d => d.value > 0);
-  
-  const PIE_COLORS = ['#10b981', '#6366f1'];
+  // Pro-rata trading stats
+  const winningTrades = trades.filter(t => t.profit > 0);
+  const losingTrades = trades.filter(t => t.profit < 0);
+  const systemGrossProfit = winningTrades.reduce((sum, t) => sum + t.profit, 0);
+  const systemGrossLoss = Math.abs(losingTrades.reduce((sum, t) => sum + t.profit, 0));
+  const systemProfitFactor = systemGrossLoss > 0 ? (systemGrossProfit / systemGrossLoss) : (systemGrossProfit > 0 ? Infinity : 0);
 
   const generatePDF = async () => {
     if (!dashboardRef.current) return;
@@ -103,54 +56,6 @@ export function InvestorDashboard({
             element.classList.add('pdf-capture');
             element.style.backgroundColor = '#ffffff';
             element.style.padding = '20px';
-            
-            // Add a style block to the cloned document to override common oklch-related variables
-            const styleTag = clonedDoc.createElement('style');
-            styleTag.innerHTML = `
-              * { 
-                --color-blue-500: #3b82f6 !important;
-                --color-slate-900: #0f172a !important;
-                --color-slate-500: #64748b !important;
-              }
-              .pdf-capture oklch { font-family: inherit !important; }
-            `;
-            clonedDoc.head.appendChild(styleTag);
-            
-            // Recursively transform all elements in the clone
-            const allElements = element.getElementsByTagName('*');
-            for (let i = 0; i < allElements.length; i++) {
-              const el = allElements[i] as HTMLElement;
-              const style = clonedDoc.defaultView?.getComputedStyle(el);
-              if (style) {
-                // Check all possible color properties using kebap-case for precision
-                ['color', 'background-color', 'border-color', 'outline-color', 'stop-color', 'fill', 'stroke', 'background-image'].forEach(prop => {
-                  try {
-                    const val = style.getPropertyValue(prop);
-                    if (val && val.includes('oklch')) {
-                      // More specific fallbacks based on property
-                      let fallback = '#334155';
-                      if (prop.includes('background')) fallback = '#ffffff';
-                      if (val.includes('0.632') || val.includes('0.16')) fallback = '#3b82f6'; // Map common blues
-                      
-                      const sanitized = val.replace(/oklch\([^)]+\)/g, fallback);
-                      el.style.setProperty(prop, sanitized, 'important');
-                    }
-                  } catch (e) {
-                    // Ignore style calculation errors
-                  }
-                });
-              }
-              
-              // Handle SVG attributes directly
-              if (el.tagName.toLowerCase() === 'svg' || el.parentElement?.tagName.toLowerCase() === 'svg') {
-                ['fill', 'stroke', 'stop-color'].forEach(attr => {
-                  const val = el.getAttribute(attr);
-                  if (val && val.includes('oklch')) {
-                    el.setAttribute(attr, '#64748b');
-                  }
-                });
-              }
-            }
           }
         }
       });
@@ -167,17 +72,6 @@ export function InvestorDashboard({
       alert('Failed to generate PDF statement.');
     } finally {
       setIsGeneratingPDF(false);
-    }
-  };
-
-  const handlePasswordChange = async () => {
-    if (!newPassword.trim()) return;
-    if (onUpdateInvestor) {
-      const hashed = await hashPassword(newPassword);
-      onUpdateInvestor(investor.id, { password: hashed });
-      setPasswordMessage('Password updated successfully.');
-      setNewPassword('');
-      setTimeout(() => setPasswordMessage(''), 3000);
     }
   };
 
@@ -212,370 +106,288 @@ export function InvestorDashboard({
     alert("Withdrawal request submitted successfully. It is now pending manager approval.");
   };
 
+  const StatCard = ({ title, value, subtitle, icon: Icon, color, trend }: { title: string, value: string | React.ReactNode, subtitle?: string | React.ReactNode, icon: any, color: string, trend?: 'up' | 'down' | 'neutral' }) => (
+    <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 relative overflow-hidden group">
+      <div className={`absolute top-0 right-0 w-24 h-24 rounded-full -mr-8 -mt-8 blur-2xl opacity-20 transition-opacity group-hover:opacity-40
+        ${color === 'blue' ? 'bg-blue-500' : color === 'emerald' ? 'bg-emerald-500' : color === 'rose' ? 'bg-rose-500' : color === 'amber' ? 'bg-amber-500' : color === 'fuchsia' ? 'bg-fuchsia-500' : 'bg-indigo-500'}`} 
+      />
+      <div className="flex items-center gap-3 mb-2">
+        <div className={`p-2 rounded-xl 
+          ${color === 'blue' ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 
+            color === 'emerald' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400' : 
+            color === 'rose' ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400' : 
+            color === 'amber' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' : 
+            color === 'fuchsia' ? 'bg-fuchsia-50 dark:bg-fuchsia-900/20 text-fuchsia-600 dark:text-fuchsia-400' : 
+            'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'}`}>
+          <Icon className="w-5 h-5" />
+        </div>
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{title}</p>
+      </div>
+      <div>
+        <div className="flex items-end gap-2">
+           <h3 className={`text-3xl font-black tracking-tight ${color === 'rose' && trend === 'down' ? 'text-rose-600 dark:text-rose-500' : color === 'emerald' && trend === 'up' ? 'text-emerald-600 dark:text-emerald-500' : 'text-slate-900 dark:text-white'}`}>{value}</h3>
+           {trend && (
+             <span className={`text-xs font-bold mb-1.5 ${trend === 'up' ? 'text-emerald-500' : trend === 'down' ? 'text-rose-500' : 'text-slate-400'}`}>
+               {trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→'}
+             </span>
+           )}
+        </div>
+        {subtitle && <div className="mt-1">{subtitle}</div>}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto" ref={dashboardRef}>
-      <div className="flex justify-between items-center mb-8" data-html2canvas-ignore>
+    <div className="space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500" ref={dashboardRef}>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-8" data-html2canvas-ignore>
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Welcome back, {investor.investorName}</h2>
-          <p className="text-slate-500 dark:text-slate-400">Here is your portfolio performance overview.</p>
+          <h2 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
+            <PieChartIcon className="w-8 h-8 text-blue-600" />
+            <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-transparent bg-clip-text">Portfolio Dashboard</span>
+          </h2>
+          <p className="text-slate-400 text-sm mt-1">Real-time performance metrics and asset growth for {investor.investorName}.</p>
         </div>
         <button 
           onClick={generatePDF}
           disabled={isGeneratingPDF}
-          className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm disabled:opacity-50"
+          className="group flex items-center gap-2 px-6 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl hover:bg-slate-800 dark:hover:bg-slate-100 disabled:opacity-70 transition-all shadow-xl active:scale-95"
         >
-          {isGeneratingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-          {isGeneratingPDF ? 'Generating...' : 'Download Statement'}
+          {isGeneratingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 group-hover:-translate-y-1 transition-transform" />}
+          <span className="text-xs font-black uppercase tracking-widest">{isGeneratingPDF ? 'Generating...' : 'Statement PDF'}</span>
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
-              <DollarSign className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-full">Current</span>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-slate-500 mb-1">Total Capital</p>
-            <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(investor.endingCapital)}</h3>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-10 h-10 bg-green-100 text-green-600 rounded-full flex items-center justify-center">
-              <TrendingUp className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-full">This Period</span>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-slate-500 mb-1">Net Profit</p>
-            <h3 className={`text-2xl font-bold ${investor.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCurrency(investor.netProfit)}
-            </h3>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">
-              <Percent className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-full">Period ROI</span>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-slate-500 mb-1">Return on Investment</p>
-            <h3 className={`text-2xl font-bold ${roi >= 0 ? 'text-indigo-600' : 'text-red-600'}`}>
-              {roi > 0 ? '+' : ''}{roi.toFixed(2)}%
-            </h3>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center">
-              <TrendingUp className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-full">Estimate</span>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-slate-500 mb-1">Monthly Return (30d)</p>
-            <h3 className={`text-2xl font-bold ${monthlyProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-              {formatCurrency(monthlyProfit)}
-            </h3>
-          </div>
-        </div>
+        <StatCard 
+           title="Total Capital" 
+           value={formatCurrency(investor.endingCapital)} 
+           icon={DollarSign} 
+           color="blue" 
+        />
+        <StatCard 
+           title="Net Profit" 
+           value={formatCurrency(investor.netProfit)} 
+           icon={TrendingUp} 
+           color={investor.netProfit >= 0 ? "emerald" : "rose"}
+           trend={investor.netProfit >= 0 ? "up" : "down"}
+        />
+        <StatCard 
+           title="Return on Investment" 
+           value={`${roi > 0 ? '+' : ''}${roi.toFixed(2)}%`} 
+           icon={Percent} 
+           color="indigo"
+           trend={roi >= 0 ? "up" : "down"} 
+        />
+        <StatCard 
+           title="High Water Mark" 
+           value={formatCurrency(investor.highWaterMark)} 
+           icon={Shield} 
+           color="amber"
+           subtitle={
+             distanceToHWM !== 0 && (
+               <span className={`text-[10px] font-bold uppercase tracking-widest ${distanceToHWM > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                 Distance: {distanceToHWM > 0 ? '+' : ''}{formatCurrency(distanceToHWM)}
+               </span>
+             )
+           }
+        />
       </div>
 
+      {showTradingJournal && trades.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <StatCard 
+             title="System Profit Factor" 
+             value={systemProfitFactor === Infinity ? '∞' : systemProfitFactor.toFixed(2)} 
+             icon={Activity} 
+             color="fuchsia"
+             trend={systemProfitFactor > 1.2 ? "up" : "down"}
+          />
+          <StatCard 
+             title="System Gross Wins" 
+             value={formatCurrency(systemGrossProfit)} 
+             icon={ArrowUpRight} 
+             color="emerald"
+          />
+          <StatCard 
+             title="System Gross Losses" 
+             value={`-${formatCurrency(systemGrossLoss)}`} 
+             icon={ArrowDownRight} 
+             color="rose"
+          />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <h3 className="text-lg font-semibold mb-6 text-slate-900">Capital Growth History</h3>
+        <div className={`bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 ${allowWithdrawals ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Capital Growth History</h3>
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-              <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="date" stroke="#64748b" />
-                <YAxis tickFormatter={(val) => `$${val}`} stroke="#64748b" />
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorCapital" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
+                <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                <YAxis tickFormatter={(val) => `$${val}`} stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} width={60} />
                 <Tooltip 
-                  formatter={(val: number) => formatCurrency(val)}
-                  contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  formatter={(val: number) => [formatCurrency(val), 'Capital']}
+                  labelFormatter={(label) => `Date: ${label}`}
+                  contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '12px' }}
+                  itemStyle={{ color: '#60a5fa', fontWeight: 'bold' }}
                 />
-                <Line type="monotone" dataKey="capital" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
-              </LineChart>
+                <Area type="monotone" dataKey="capital" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorCapital)" />
+              </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <h3 className="text-lg font-semibold mb-6 text-slate-900">Account Details</h3>
-          <div className="space-y-4">
-            {accountDetails.map((detail, idx) => (
-              <div key={idx} className="flex justify-between items-center py-3 border-b border-slate-50 last:border-0">
-                <span className="text-sm text-slate-500">{detail.label}</span>
-                <span className="text-sm font-semibold text-slate-900">{detail.value}</span>
-              </div>
-            ))}
-            <div className="pt-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Shield className="w-4 h-4 text-blue-500" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Security Status</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-sm font-medium text-slate-700">Protected by HWM & Equity Guard</span>
-              </div>
-            </div>
+        {allowWithdrawals && (
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col justify-between" data-html2canvas-ignore>
+             <div>
+                <div className="flex items-center gap-3 mb-6">
+                   <ArrowRightLeft className="w-5 h-5 text-indigo-500" />
+                   <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Request Withdrawal</h3>
+                </div>
+                
+                <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 p-4 rounded-2xl text-xs font-semibold mb-6 flex gap-2">
+                   Available to withdraw: <span className="font-mono ml-auto">{formatCurrency(investor.endingCapital)}</span>
+                </div>
+                
+                <div className="space-y-4">
+                   <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount</label>
+                      <input 
+                         type="number" 
+                         placeholder="0.00" 
+                         className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm dark:text-white font-mono"
+                         value={withdrawAmount}
+                         onChange={e => setWithdrawAmount(e.target.value)}
+                         max={investor.endingCapital}
+                      />
+                   </div>
+                   <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Payment Note (Optional)</label>
+                      <input 
+                         type="text" 
+                         placeholder="e.g. Send to bank ending in 1234" 
+                         className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm dark:text-white"
+                         value={withdrawNotes}
+                         onChange={e => setWithdrawNotes(e.target.value)}
+                      />
+                   </div>
+                </div>
+             </div>
+             <div>
+                <button 
+                   onClick={handleWithdrawRequestClick}
+                   disabled={!withdrawAmount || Number(withdrawAmount) <= 0}
+                   className="mt-6 w-full flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl hover:bg-slate-800 dark:hover:bg-slate-100 font-bold shadow-lg active:scale-95 transition-all disabled:opacity-50 disabled:shadow-none"
+                >
+                   Submit Request
+                </button>
+             </div>
           </div>
+        )}
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
+          <ArrowRightLeft className="w-5 h-5 text-slate-400" />
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Recent Transactions</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left border-collapse">
+            <thead className="bg-slate-50/50 dark:bg-slate-900/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              <tr>
+                <th className="px-6 py-4">Date</th>
+                <th className="px-6 py-4">Type</th>
+                <th className="px-6 py-4 text-right">Amount</th>
+                <th className="px-6 py-4 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {myTransactions.map(t => (
+                <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
+                  <td className="px-6 py-5 text-slate-500 dark:text-slate-400 font-medium">
+                     {new Date(t.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                  </td>
+                  <td className="px-6 py-5">
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest
+                      ${t.type === 'deposit' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 
+                        t.type === 'withdrawal' || t.type === 'manager_withdrawal' ? 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400' : 
+                        t.type === 'fee_payment' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400' : 
+                        'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-400'}`}>
+                      {t.type.replace('_', ' ')}
+                    </span>
+                  </td>
+                  <td className="px-6 py-5 text-right font-bold text-slate-900 dark:text-slate-200">
+                    <span className={t.type === 'withdrawal' || t.type === 'manager_withdrawal' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}>
+                       {t.type === 'withdrawal' || t.type === 'manager_withdrawal' ? '-' : '+'}{formatCurrency(t.amount)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-5">
+                    <div className="flex justify-center">
+                       <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest 
+                         ${t.status === 'pending' ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 border border-amber-200 dark:border-amber-800' :
+                           t.status === 'rejected' ? 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400 border border-rose-200 dark:border-rose-800' : 
+                           'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}>
+                         {t.status}
+                       </span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {myTransactions.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-6 py-12 text-center">
+                     <span className="text-xs font-bold text-slate-400 block pb-2">No transactions recorded</span>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {showJournalVisibility && trades.length > 0 && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-bold text-slate-900">System Trading Statistics</h3>
-            <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold uppercase tracking-widest">Live Data</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="w-5 h-5 text-fuchsia-500" />
-                <h3 className="text-sm font-semibold text-slate-700">Profit Factor</h3>
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200" data-html2canvas-ignore>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-md w-full mx-4 shadow-xl border border-slate-200 dark:border-slate-800 scale-in-center">
+            <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight mb-2">Confirm Withdrawal</h3>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">Please carefully review the details of your withdrawal request. This action requires administrative approval.</p>
+            
+            <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 space-y-4 mb-8">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Requested Amount</span>
+                <span className="font-mono text-slate-900 dark:text-white font-bold">{formatCurrency(parseFloat(withdrawAmount) || 0)}</span>
               </div>
-              <p className="text-2xl font-bold text-slate-900">{systemProfitFactor === Infinity ? '∞' : systemProfitFactor.toFixed(2)}</p>
+              <div className="has-divider h-px w-full bg-slate-200 dark:bg-slate-700 border-none"></div>
+              <div className="flex justify-between items-end">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Deduction</span>
+                <span className="text-xl font-black text-rose-600 dark:text-rose-500">{formatCurrency(parseFloat(withdrawAmount) || 0)}</span>
+              </div>
             </div>
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="w-5 h-5 text-emerald-500" />
-                <h3 className="text-sm font-semibold text-slate-700">Avg Win</h3>
-              </div>
-              <p className="text-2xl font-bold text-emerald-600">{formatCurrency(avgWin)}</p>
-            </div>
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingDown className="w-5 h-5 text-rose-500" />
-                <h3 className="text-sm font-semibold text-slate-700">Avg Loss</h3>
-              </div>
-              <p className="text-2xl font-bold text-rose-600">-{formatCurrency(avgLoss)}</p>
-            </div>
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-              <div className="flex items-center gap-2 mb-2">
-                <Shield className="w-5 h-5 text-blue-500" />
-                <h3 className="text-sm font-semibold text-slate-700">Best Trade</h3>
-              </div>
-              <p className="text-2xl font-bold text-slate-900 text-green-600">{formatCurrency(bestTrade)}</p>
+            
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setShowConfirmModal(false)}
+                className="px-6 py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 font-bold active:scale-95 transition-all text-xs uppercase tracking-widest"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleConfirmWithdrawRequest}
+                className="px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold active:scale-95 transition-all text-xs uppercase tracking-widest shadow-lg shadow-indigo-200 dark:shadow-none"
+              >
+                Confirm Request
+              </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* Moved down the charts and fee status */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-6">
-        <div className="lg:col-span-1 space-y-6">
-          {/* High Water Mark Detail */}
-          <div className="bg-slate-900 p-6 rounded-xl shadow-xl text-white">
-            <div className="flex items-center gap-2 mb-4">
-              <Shield className="w-5 h-5 text-blue-400" />
-              <h3 className="font-semibold">Equity Protection (HWM)</h3>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <p className="text-slate-400 text-sm">Protected Level</p>
-                <p className="text-2xl font-bold">{formatCurrency(investor.highWaterMark)}</p>
-              </div>
-              <div className="p-3 bg-white/5 rounded-lg border border-white/10">
-                <p className="text-xs text-slate-400 mb-1">Status</p>
-                <p className={`text-sm font-medium ${distanceToHWM >= 0 ? 'text-green-400' : 'text-amber-400'}`}>
-                  {distanceToHWM >= 0 
-                    ? `Currently ${formatCurrency(distanceToHWM)} above HWM` 
-                    : `Currently ${formatCurrency(Math.abs(distanceToHWM))} below HWM`}
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h3 className="text-lg font-semibold mb-4 text-slate-900 flex items-center gap-2">
-              <PieChartIcon className="w-5 h-5 text-slate-500" />
-              Profit Split (Period)
-            </h3>
-            {profitBreakdownData.length > 0 ? (
-              <div className="h-48">
-                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-                  <PieChart>
-                    <Pie
-                      data={profitBreakdownData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={70}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {profitBreakdownData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                    <Legend verticalAlign="bottom" height={36}/>
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="h-48 flex items-center justify-center text-slate-500 text-sm">
-                No active performance data.
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="lg:col-span-2 space-y-6">
-          {/* Fee Status */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h3 className="text-lg font-semibold mb-4 text-slate-900 flex items-center gap-2">
-              <Percent className="w-5 h-5 text-slate-500" />
-              Performance Fees
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                    <CheckCircle2 className="w-4 h-4 text-green-600" />
-                  </div>
-                  <span className="text-sm font-medium text-slate-700">Lifetime Paid</span>
-                </div>
-                <span className="font-bold text-slate-900 text-lg">{formatCurrency(investor.feeCollected)}</span>
-              </div>
-              <div className="flex justify-between items-center p-4 bg-orange-50 rounded-xl border border-orange-100">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
-                    <AlertCircle className="w-4 h-4 text-orange-600" />
-                  </div>
-                  <span className="text-sm font-medium text-orange-800">Pending Billing</span>
-                </div>
-                <span className="font-bold text-orange-600 text-lg">{formatCurrency(investor.unpaidFee)}</span>
-              </div>
-            </div>
-            <p className="text-[10px] text-slate-400 mt-4 uppercase tracking-widest font-bold">Billing Basis: {investor.customFeePercentage ?? investor.feePercentage ?? 20}% of profit above High Water Mark</p>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center gap-2">
-              <ArrowRightLeft className="w-5 h-5 text-slate-500" />
-              <h3 className="font-semibold text-slate-900">Portfolio Activity</h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-xs font-bold tracking-wider">
-                  <tr>
-                    <th className="px-6 py-4">Date</th>
-                    <th className="px-6 py-4">Transaction</th>
-                    <th className="px-6 py-4">Amount</th>
-                    <th className="px-6 py-4">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {myTransactions.slice(0, 5).map(t => (
-                    <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-4 text-slate-600 font-medium">{new Date(t.date).toLocaleDateString()}</td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide
-                          ${t.type === 'deposit' ? 'bg-green-100 text-green-800' : 
-                            t.type === 'withdrawal' ? 'bg-red-100 text-red-800' : 
-                            t.type === 'fee_payment' ? 'bg-blue-100 text-blue-800' : 
-                            'bg-purple-100 text-purple-800'}`}>
-                          {t.type.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className={`px-6 py-4 font-bold text-lg ${t.type === 'withdrawal' || t.type === 'fee_payment' ? 'text-red-600' : 'text-green-600'}`}>
-                        {t.type === 'withdrawal' || t.type === 'fee_payment' ? '-' : '+'}{formatCurrency(t.amount)}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize 
-                          ${t.status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                            t.status === 'rejected' ? 'bg-red-100 text-red-700' : 
-                            'bg-emerald-50 text-emerald-600'}`}>
-                          {t.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                  {myTransactions.length === 0 && (
-                    <tr><td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">No historical records found for this account.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Account Settings */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" data-html2canvas-ignore>
-        <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center gap-2">
-          <Key className="w-5 h-5 text-slate-500" />
-          <h3 className="font-semibold text-slate-900">Account Settings</h3>
-        </div>
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="max-w-md">
-            <h4 className="text-sm font-medium text-slate-700 mb-2">Change Password</h4>
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3">
-                <input 
-                  type="password" 
-                  placeholder="New Password" 
-                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
-                />
-                <button 
-                  onClick={handlePasswordChange}
-                  disabled={!newPassword.trim()}
-                  className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 transition-colors"
-                >
-                  Update
-                </button>
-              </div>
-              {newPassword && (
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden flex">
-                    <div className={`h-full ${evaluatePasswordStrength(newPassword).color}`} style={{ width: `${(evaluatePasswordStrength(newPassword).score / 4) * 100}%` }}></div>
-                  </div>
-                  <span className="text-xs font-medium text-slate-500">{evaluatePasswordStrength(newPassword).label}</span>
-                </div>
-              )}
-            </div>
-            {passwordMessage && (
-              <p className="mt-2 text-sm text-green-600 flex items-center gap-1">
-                <CheckCircle2 className="w-4 h-4" />
-                {passwordMessage}
-              </p>
-            )}
-          </div>
-          
-          <div className="max-w-md border-t border-slate-200 pt-6 md:border-t-0 md:pt-0 md:border-l md:pl-8">
-            <h4 className="text-sm font-medium text-slate-700 mb-2">Display Currency</h4>
-            <div className="flex items-center gap-3">
-              <select 
-                value={investor.baseCurrency || 'USD'}
-                onChange={e => onUpdateInvestor && onUpdateInvestor(investor.id, { baseCurrency: e.target.value })}
-                className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-              >
-                <option value="USD">USD ($)</option>
-                <option value="EUR">EUR (€)</option>
-                <option value="GBP">GBP (£)</option>
-                <option value="AUD">AUD (A$)</option>
-                <option value="CAD">CAD (C$)</option>
-                <option value="JPY">JPY (¥)</option>
-                <option value="MYR">MYR (RM)</option>
-                <option value="CHF">CHF (Fr)</option>
-              </select>
-            </div>
-            <p className="text-xs text-slate-500 mt-2">Personalize the currency formatting on your dashboard.</p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

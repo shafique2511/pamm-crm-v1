@@ -1,20 +1,21 @@
 import React, { useState } from 'react';
 import { Trade } from '../types';
 import { formatCurrency } from '../lib/utils';
-import { RefreshCw, BookOpen, ArrowUpRight, ArrowDownRight, Search, TrendingUp, TrendingDown, Target, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Download } from 'lucide-react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { RefreshCw, BookOpen, ArrowUpRight, ArrowDownRight, Search, TrendingUp, TrendingDown, Target, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Save, Edit3, Briefcase, Activity, FileText } from 'lucide-react';
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-export function JournalView({ trades, onSyncMT5, totalCapital, readOnly }: { trades: Trade[], onSyncMT5: () => Promise<{success: boolean, count: number, error?: string}>, totalCapital: number, readOnly?: boolean }) {
+export function JournalView({ trades, onSyncMT5, onUpdateTrade, totalCapital, readOnly }: { trades: Trade[], onSyncMT5: () => Promise<{success: boolean, count: number, error?: string}>, onUpdateTrade?: (id: string, updates: Partial<Trade>) => void, totalCapital: number, readOnly?: boolean }) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'win' | 'loss'>('all');
   const [tradeType, setTradeType] = useState<'all' | 'buy' | 'sell'>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [profitRange, setProfitRange] = useState<'all' | '>1000' | '>0' | '<0' | '<-1000'>('all');
+  
   const [syncStatus, setSyncStatus] = useState<{message: string, type: 'success'|'error'} | null>(null);
+  
   const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
+  const [editForm, setEditForm] = useState<Partial<Trade>>({});
 
   const handleSync = async () => {
     setIsSyncing(true);
@@ -31,42 +32,6 @@ export function JournalView({ trades, onSyncMT5, totalCapital, readOnly }: { tra
     setTimeout(() => setSyncStatus(null), 5000);
   };
 
-  const handleExportCSV = () => {
-    setIsExporting(true);
-    try {
-      const headers = ['Ticket', 'Open Time', 'Close Time', 'Symbol', 'Type', 'Volume', 'Open Price', 'Close Price', 'Profit', 'Commission', 'Swap', 'Net Profit', 'Comment'];
-      const rows = filteredTrades.map(t => [
-        t.ticket,
-        t.openTime,
-        t.closeTime,
-        t.symbol,
-        t.type,
-        t.volume,
-        t.openPrice,
-        t.closePrice,
-        t.profit,
-        t.commission || 0,
-        t.swap || 0,
-        t.profit + (t.commission || 0) + (t.swap || 0),
-        `"${(t.comment || '').replace(/"/g, '""')}"`
-      ]);
-
-      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', `trading_journal_${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (e) {
-      console.error('Export failed', e);
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   const filteredTrades = trades.filter(t => {
     const matchesSearch = t.symbol.toLowerCase().includes(searchTerm.toLowerCase()) || t.ticket.includes(searchTerm);
     const matchesFilter = filterType === 'all' || (filterType === 'win' && t.profit > 0) || (filterType === 'loss' && t.profit <= 0);
@@ -74,93 +39,99 @@ export function JournalView({ trades, onSyncMT5, totalCapital, readOnly }: { tra
     
     let matchesDate = true;
     const tradeDate = new Date(t.closeTime).getTime();
-    if (dateFrom) {
-      matchesDate = matchesDate && tradeDate >= new Date(dateFrom).getTime();
-    }
-    if (dateTo) {
-      matchesDate = matchesDate && tradeDate <= new Date(dateTo).getTime() + 86400000; // Add 1 day to include end of day
-    }
+    if (dateFrom) matchesDate = matchesDate && tradeDate >= new Date(dateFrom).getTime();
+    if (dateTo) matchesDate = matchesDate && tradeDate <= new Date(dateTo).getTime() + 86400000;
 
-    let matchesProfit = true;
-    if (profitRange === '>1000') matchesProfit = t.profit > 1000;
-    else if (profitRange === '>0') matchesProfit = t.profit > 0;
-    else if (profitRange === '<0') matchesProfit = t.profit < 0;
-    else if (profitRange === '<-1000') matchesProfit = t.profit < -1000;
-
-    return matchesSearch && matchesFilter && matchesTradeType && matchesDate && matchesProfit;
+    return matchesSearch && matchesFilter && matchesTradeType && matchesDate;
   });
 
   const totalProfit = filteredTrades.reduce((sum, t) => sum + t.profit, 0);
-  const winRate = filteredTrades.length > 0 
-    ? (filteredTrades.filter(t => t.profit > 0).length / filteredTrades.length) * 100 
-    : 0;
-
-  const winningTrades = filteredTrades.filter(t => t.profit > 0);
-  const losingTrades = filteredTrades.filter(t => t.profit <= 0);
-
-  const avgWin = winningTrades.length > 0 
-    ? winningTrades.reduce((sum, t) => sum + t.profit, 0) / winningTrades.length 
-    : 0;
-  const avgLoss = losingTrades.length > 0 
-    ? losingTrades.reduce((sum, t) => sum + Math.abs(t.profit), 0) / losingTrades.length 
-    : 0;
-
+  const winningTradesCount = filteredTrades.filter(t => t.profit > 0).length;
+  const losingTradesCount = filteredTrades.filter(t => t.profit <= 0).length;
+  
+  const winRate = filteredTrades.length > 0 ? (winningTradesCount / filteredTrades.length) * 100 : 0;
   const grossProfit = filteredTrades.filter(t => t.profit > 0).reduce((sum, t) => sum + t.profit, 0);
   const grossLoss = filteredTrades.filter(t => t.profit < 0).reduce((sum, t) => sum + Math.abs(t.profit), 0);
   const profitFactor = grossLoss > 0 ? (grossProfit / grossLoss) : grossProfit > 0 ? Infinity : 0;
 
-  const bestTrade = filteredTrades.length > 0 ? Math.max(...filteredTrades.map(t => t.profit)) : 0;
-  const worstTrade = filteredTrades.length > 0 ? Math.min(...filteredTrades.map(t => t.profit)) : 0;
-  const roi = totalCapital > 0 ? (totalProfit / totalCapital) * 100 : 0;
+  const avgWin = winningTradesCount > 0 ? grossProfit / winningTradesCount : 0;
+  const avgLoss = losingTradesCount > 0 ? grossLoss / losingTradesCount : 0;
+  const expectancy = (winRate / 100 * avgWin) - ((1 - (winRate / 100)) * avgLoss);
 
   // Prepare cumulative chart data (oldest to newest)
   const chartData = [...filteredTrades].reverse().reduce((acc, trade) => {
     const prevTotal = acc.length > 0 ? acc[acc.length - 1].cumulative : 0;
-    const netTradeProfit = trade.profit + (trade.commission || 0) + (trade.swap || 0);
     acc.push({
       ticket: trade.ticket,
       date: new Date(trade.closeTime).toLocaleDateString(),
-      profit: netTradeProfit,
-      cumulative: prevTotal + netTradeProfit
+      profit: trade.profit,
+      cumulative: prevTotal + trade.profit
     });
     return acc;
   }, [] as any[]);
 
-  const expectancy = filteredTrades.length > 0 ? (totalProfit + filteredTrades.reduce((s,t) => s + (t.commission||0) + (t.swap||0), 0)) / filteredTrades.length : 0;
+  const toggleExpand = (trade: Trade) => {
+    if (expandedTradeId === trade.id) {
+      setExpandedTradeId(null);
+    } else {
+      setExpandedTradeId(trade.id);
+      setEditForm({
+        entryReason: trade.entryReason || '',
+        exitReason: trade.exitReason || '',
+        notes: trade.notes || '',
+        sl: trade.sl || undefined,
+        tp: trade.tp || undefined
+      });
+    }
+  };
 
-  // Profit by Symbol
-  const profitBySymbol = filteredTrades.reduce((acc, t) => {
-    acc[t.symbol] = (acc[t.symbol] || 0) + t.profit;
-    return acc;
-  }, {} as Record<string, number>);
-  const symbolData = Object.entries(profitBySymbol)
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 5);
+  const saveTradeDetails = (id: string) => {
+    if (onUpdateTrade) {
+      onUpdateTrade(id, editForm);
+    }
+    setExpandedTradeId(null);
+  };
 
-  const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444'];
+  const StatCard = ({ title, value, icon: Icon, color, trend }: { title: string, value: string, icon: any, color: string, trend?: 'up' | 'down' | 'neutral' }) => (
+    <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 relative overflow-hidden group">
+      <div className={`absolute top-0 right-0 w-24 h-24 rounded-full -mr-8 -mt-8 blur-2xl opacity-20 transition-opacity group-hover:opacity-40
+        ${color === 'blue' ? 'bg-blue-500' : color === 'emerald' ? 'bg-emerald-500' : color === 'rose' ? 'bg-rose-500' : color === 'amber' ? 'bg-amber-500' : 'bg-indigo-500'}`} 
+      />
+      <div className="flex items-center gap-3 mb-2">
+        <div className={`p-2 rounded-xl 
+          ${color === 'blue' ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 
+            color === 'emerald' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400' : 
+            color === 'rose' ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400' : 
+            color === 'amber' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' : 
+            'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'}`}>
+          <Icon className="w-5 h-5" />
+        </div>
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{title}</p>
+      </div>
+      <div className="flex items-end gap-2">
+        <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{value}</h3>
+        {trend && (
+          <span className={`text-xs font-bold mb-1.5 ${trend === 'up' ? 'text-emerald-500' : trend === 'down' ? 'text-rose-500' : 'text-slate-400'}`}>
+            {trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→'}
+          </span>
+        )}
+      </div>
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <BookOpen className="w-6 h-6 text-blue-600" />
+          <h2 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
+            <BookOpen className="w-8 h-8 text-indigo-600" />
             Trading Journal
           </h2>
-          <p className="text-slate-500 text-sm">Sync and review your MetaTrader 5 history</p>
+          <p className="text-slate-400 text-sm">Professional trade tracking, logic auditing, and advanced metrics.</p>
         </div>
         <div className="flex items-center gap-4">
-          <button 
-            onClick={handleExportCSV}
-            disabled={isExporting || filteredTrades.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors shadow-sm text-sm font-medium"
-          >
-            <Download className="w-4 h-4" />
-            Export CSV
-          </button>
           {syncStatus && (
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium ${syncStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest shadow-sm ${syncStatus.type === 'success' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' : 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 border border-rose-200 dark:border-rose-800'}`}>
               {syncStatus.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
               {syncStatus.message}
             </div>
@@ -169,300 +140,268 @@ export function JournalView({ trades, onSyncMT5, totalCapital, readOnly }: { tra
             <button 
               onClick={handleSync}
               disabled={isSyncing}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-70 transition-colors"
+              className="group flex items-center gap-2 px-6 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl hover:bg-slate-800 dark:hover:bg-slate-100 disabled:opacity-70 transition-all shadow-xl active:scale-95"
             >
-              <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-              {isSyncing ? 'Syncing with MT5...' : 'Sync MT5 History'}
+              <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
+              <span className="text-xs font-black uppercase tracking-widest">{isSyncing ? 'Syncing...' : 'Sync MT5 Data'}</span>
             </button>
           )}
         </div>
       </div>
 
+      {/* Advanced Metrics Bento Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-1">
-            <Target className="w-4 h-4 text-slate-400" />
-            <p className="text-sm font-medium text-slate-500">Total Trades</p>
-          </div>
-          <p className="text-2xl font-bold text-slate-900">{trades.length}</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-1">
-            <Target className="w-4 h-4 text-blue-500" />
-            <p className="text-sm font-medium text-slate-500">Expectancy</p>
-          </div>
-          <p className="text-2xl font-bold text-blue-600">{formatCurrency(expectancy)}</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-1">
-            <TrendingUp className="w-4 h-4 text-slate-400" />
-            <p className="text-sm font-medium text-slate-500">Win Rate</p>
-          </div>
-          <p className="text-2xl font-bold text-slate-900">{winRate.toFixed(1)}%</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-1">
-            <TrendingUp className={`w-4 h-4 ${roi >= 0 ? 'text-green-500' : 'text-red-500'}`} />
-            <p className="text-sm font-medium text-slate-500">ROI (on AUM)</p>
-          </div>
-          <p className={`text-2xl font-bold ${roi >= 0 ? 'text-green-600' : 'text-red-600'}`}>{roi.toFixed(2)}%</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-1">
-            <BookOpen className="w-4 h-4 text-slate-400" />
-            <p className="text-sm font-medium text-slate-500">Profit Factor</p>
-          </div>
-          <p className="text-2xl font-bold text-slate-900">{profitFactor === Infinity ? '∞' : profitFactor.toFixed(2)}</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-1">
-            <ArrowUpRight className="w-4 h-4 text-green-500" />
-            <p className="text-sm font-medium text-slate-500">Gross Profit</p>
-          </div>
-          <p className="text-2xl font-bold text-green-600">{formatCurrency(grossProfit)}</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-1">
-            <ArrowDownRight className="w-4 h-4 text-red-500" />
-            <p className="text-sm font-medium text-slate-500">Gross Loss</p>
-          </div>
-          <p className="text-2xl font-bold text-red-600">-{formatCurrency(grossLoss)}</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-1">
-            <ArrowUpRight className="w-4 h-4 text-green-500" />
-            <p className="text-sm font-medium text-slate-500">Avg Win</p>
-          </div>
-          <p className="text-2xl font-bold text-green-600">{formatCurrency(avgWin)}</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-1">
-            <ArrowDownRight className="w-4 h-4 text-red-500" />
-            <p className="text-sm font-medium text-slate-500">Avg Loss</p>
-          </div>
-          <p className="text-2xl font-bold text-red-600">-{formatCurrency(avgLoss)}</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-1">
-            <ArrowUpRight className="w-4 h-4 text-green-500" />
-            <p className="text-sm font-medium text-slate-500">Best Trade</p>
-          </div>
-          <p className="text-2xl font-bold text-green-600">{formatCurrency(bestTrade)}</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-1">
-            <ArrowDownRight className="w-4 h-4 text-red-500" />
-            <p className="text-sm font-medium text-slate-500">Worst Trade</p>
-          </div>
-          <p className="text-2xl font-bold text-red-600">{formatCurrency(worstTrade)}</p>
-        </div>
+        <StatCard title="Win Rate" value={`${winRate.toFixed(1)}%`} icon={Target} color="blue" trend={winRate > 50 ? 'up' : 'down'} />
+        <StatCard title="Profit Factor" value={profitFactor === Infinity ? '∞' : profitFactor.toFixed(2)} icon={Activity} color="emerald" trend={profitFactor > 1.5 ? 'up' : 'down'} />
+        <StatCard title="Expectancy" value={formatCurrency(expectancy)} icon={TrendingUp} color="amber" trend={expectancy > 0 ? 'up' : 'down'} />
+        <StatCard title="Average Win" value={formatCurrency(avgWin)} icon={ArrowUpRight} color="emerald" />
+        <StatCard title="Average Loss" value={`-${formatCurrency(avgLoss)}`} icon={ArrowDownRight} color="rose" />
+        <StatCard title="Gross Profit" value={formatCurrency(grossProfit)} icon={TrendingUp} color="emerald" />
+        <StatCard title="Gross Loss" value={`-${formatCurrency(grossLoss)}`} icon={TrendingDown} color="rose" />
+        <StatCard title="Net P/L" value={formatCurrency(totalProfit)} icon={Briefcase} color={totalProfit >= 0 ? 'emerald' : 'rose'} trend={totalProfit >= 0 ? 'up' : 'down'} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <h3 className="text-lg font-semibold mb-6 text-slate-900">Cumulative Profit</h3>
+        <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800">
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Equity Curve (Filtered)</h3>
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-              <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="date" stroke="#64748b" />
-                <YAxis tickFormatter={(val) => `$${val}`} stroke="#64748b" />
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorCumulative" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
+                <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                <YAxis tickFormatter={(val) => `$${val}`} stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} width={60} />
                 <Tooltip 
-                  formatter={(val: number, name: string) => [formatCurrency(val), name === 'cumulative' ? 'Total Profit' : 'Profit']}
+                  formatter={(val: number) => [formatCurrency(val), 'Cumulative P/L']}
                   labelFormatter={(label) => `Date: ${label}`}
-                  contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '12px' }}
+                  itemStyle={{ color: '#818cf8', fontWeight: 'bold' }}
                 />
-                <Line type="stepAfter" dataKey="cumulative" stroke="#3b82f6" strokeWidth={3} dot={false} />
-              </LineChart>
+                <Area type="monotone" dataKey="cumulative" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorCumulative)" />
+              </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <h3 className="text-lg font-semibold mb-6 text-slate-900">Top Symbols (Profit)</h3>
-          {symbolData.length > 0 ? (
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-                <BarChart data={symbolData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-                  <XAxis type="number" tickFormatter={(val) => `$${val}`} stroke="#64748b" />
-                  <YAxis dataKey="name" type="category" stroke="#64748b" />
-                  <Tooltip 
-                    formatter={(value: number) => formatCurrency(value)}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  />
-                  <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                    {symbolData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.value >= 0 ? '#10b981' : '#ef4444'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="h-72 flex items-center justify-center text-slate-500">
-              No symbol data available
-            </div>
-          )}
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
+           <div>
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Quick Controls</h3>
+              <div className="space-y-4">
+                 <div className="relative">
+                    <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input 
+                       type="text" 
+                       placeholder="Search Ticket or Symbol..." 
+                       value={searchTerm}
+                       onChange={(e) => setSearchTerm(e.target.value)}
+                       className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm dark:text-white font-medium"
+                    />
+                 </div>
+                 <div className="grid grid-cols-2 gap-4">
+                    <select 
+                       className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-sm font-medium dark:text-white"
+                       value={filterType}
+                       onChange={(e) => setFilterType(e.target.value as any)}
+                    >
+                       <option value="all">All P/L</option>
+                       <option value="win">Wins Only</option>
+                       <option value="loss">Losses Only</option>
+                    </select>
+                    <select 
+                       className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-sm font-medium dark:text-white"
+                       value={tradeType}
+                       onChange={(e) => setTradeType(e.target.value as any)}
+                    >
+                       <option value="all">All Types</option>
+                       <option value="buy">Buys</option>
+                       <option value="sell">Sells</option>
+                    </select>
+                 </div>
+                 <div className="grid grid-cols-2 gap-4">
+                    <input 
+                       type="date"
+                       value={dateFrom}
+                       onChange={(e) => setDateFrom(e.target.value)}
+                       className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-xs font-medium dark:text-white"
+                    />
+                    <input 
+                       type="date"
+                       value={dateTo}
+                       onChange={(e) => setDateTo(e.target.value)}
+                       className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-xs font-medium dark:text-white"
+                    />
+                 </div>
+              </div>
+           </div>
+           
+           <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800">
+              <div className="flex items-center justify-between">
+                 <span className="text-xs font-bold text-slate-500">Filtered Trades:</span>
+                 <span className="text-xl font-black text-slate-900 dark:text-white">{filteredTrades.length}</span>
+              </div>
+           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-4 border-b border-slate-200 flex flex-col md:flex-row bg-slate-50 gap-4">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Search symbol or ticket..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-4">
-            <select 
-              className="px-4 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value as any)}
-            >
-              <option value="all">All Profit/Loss</option>
-              <option value="win">Winning Trades</option>
-              <option value="loss">Losing Trades</option>
-            </select>
-            <select 
-              className="px-4 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              value={tradeType}
-              onChange={(e) => setTradeType(e.target.value as any)}
-            >
-              <option value="all">All Types</option>
-              <option value="buy">Buy</option>
-              <option value="sell">Sell</option>
-            </select>
-            <select 
-              className="px-4 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              value={profitRange}
-              onChange={(e) => setProfitRange(e.target.value as any)}
-            >
-              <option value="all">Any Profit Range</option>
-              <option value=">1000">&gt; $1,000</option>
-              <option value=">0">&gt; $0</option>
-              <option value="<0">&lt; $0</option>
-              <option value="<-1000">&lt; -$1,000</option>
-            </select>
-            <div className="flex items-center gap-2">
-              <input 
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                title="From Date"
-              />
-              <span className="text-slate-400">-</span>
-              <input 
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                title="To Date"
-              />
-            </div>
-          </div>
-        </div>
+      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+          <table className="w-full text-sm text-left border-collapse">
+            <thead className="bg-slate-50/50 dark:bg-slate-900/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
               <tr>
-                <th className="px-4 py-3 w-8"></th>
-                <th className="px-4 py-3">Ticket</th>
-                <th className="px-4 py-3">Open Time</th>
-                <th className="px-4 py-3">Close Time</th>
-                <th className="px-4 py-3">Symbol</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Volume</th>
-                <th className="px-4 py-3">Open Price</th>
-                <th className="px-4 py-3">Close Price</th>
-                <th className="px-4 py-3 text-right">Net Profit</th>
+                <th className="px-6 py-4 w-12"></th>
+                <th className="px-6 py-4">Symbol & Ticket</th>
+                <th className="px-6 py-4">Open / Close</th>
+                <th className="px-6 py-4">Type</th>
+                <th className="px-6 py-4">Volume</th>
+                <th className="px-6 py-4 text-right">Profit</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredTrades.map(t => (
                 <React.Fragment key={t.id}>
                   <tr 
-                    onClick={() => setExpandedTradeId(expandedTradeId === t.id ? null : t.id)}
-                    className="hover:bg-slate-50/50 cursor-pointer transition-colors"
+                    onClick={() => toggleExpand(t)}
+                    className={`cursor-pointer transition-colors ${expandedTradeId === t.id ? 'bg-indigo-50/30 dark:bg-indigo-900/10' : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/20'}`}
                   >
-                    <td className="px-4 py-3 text-slate-400">
-                      {expandedTradeId === t.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    <td className="px-6 py-5 text-slate-400">
+                      <div className="w-6 h-6 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                        {expandedTradeId === t.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </div>
                     </td>
-                    <td className="px-4 py-3 font-mono text-slate-500">{t.ticket}</td>
-                    <td className="px-4 py-3 text-slate-600">{new Date(t.openTime).toLocaleString()}</td>
-                    <td className="px-4 py-3 text-slate-600">{new Date(t.closeTime).toLocaleString()}</td>
-                    <td className="px-4 py-3 font-bold text-slate-900">{t.symbol}</td>
-                    <td className="px-4 py-3">
-                      <span className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full w-fit ${t.type === 'buy' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    <td className="px-6 py-5">
+                       <div className="flex flex-col">
+                          <span className="font-bold text-slate-900 dark:text-slate-100">{t.symbol}</span>
+                          <span className="text-[10px] font-mono text-slate-400 mt-1 uppercase">#{t.ticket}</span>
+                       </div>
+                    </td>
+                    <td className="px-6 py-5">
+                       <div className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400 font-mono">
+                          <span>{new Date(t.openTime).toLocaleString()}</span>
+                          <span>{new Date(t.closeTime).toLocaleString()}</span>
+                       </div>
+                    </td>
+                    <td className="px-6 py-5">
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest
+                        ${t.type === 'buy' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 
+                                             'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400'}`}>
                         {t.type === 'buy' ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                        {t.type.toUpperCase()}
+                        {t.type}
                       </span>
                     </td>
-                    <td className="px-4 py-3">{t.volume.toFixed(2)}</td>
-                    <td className="px-4 py-3 font-mono">{t.openPrice.toFixed(5)}</td>
-                    <td className="px-4 py-3 font-mono">{t.closePrice.toFixed(5)}</td>
-                    <td className={`px-4 py-3 text-right font-medium ${t.profit + (t.commission || 0) + (t.swap || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(t.profit + (t.commission || 0) + (t.swap || 0))}
+                    <td className="px-6 py-5 font-bold text-slate-900 dark:text-slate-300">
+                      {t.volume.toFixed(2)} Lots
+                    </td>
+                    <td className="px-6 py-5 text-right">
+                      <span className={`text-sm font-black ${t.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                         {t.profit >= 0 ? '+' : ''}{formatCurrency(t.profit)}
+                      </span>
                     </td>
                   </tr>
+
+                  {/* Expanded Trade Details & Edit Form */}
                   {expandedTradeId === t.id && (
-                    <tr className="bg-slate-50 border-b border-slate-200">
-                      <td colSpan={10} className="px-4 py-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                          <div className="bg-white p-3 rounded-lg border border-slate-200">
-                            <span className="block text-xs font-medium text-slate-500 mb-1">Commission</span>
-                            <span className="text-slate-900">{t.commission !== undefined ? formatCurrency(t.commission) : '0.00'}</span>
-                          </div>
-                          <div className="bg-white p-3 rounded-lg border border-slate-200">
-                            <span className="block text-xs font-medium text-slate-500 mb-1">Swap</span>
-                            <span className="text-slate-900">{t.swap !== undefined ? formatCurrency(t.swap) : '0.00'}</span>
-                          </div>
-                          <div className="bg-white p-3 rounded-lg border border-slate-200">
-                            <span className="block text-xs font-medium text-slate-500 mb-1">Pips</span>
-                            <span className={`font-semibold ${t.pips && t.pips >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {t.pips !== undefined ? t.pips.toFixed(1) : 'N/A'}
-                            </span>
-                          </div>
-                          <div className="bg-white p-3 rounded-lg border border-slate-200">
-                            <span className="block text-xs font-medium text-slate-500 mb-1">Duration</span>
-                            <span className="text-slate-900">
-                              {Math.floor((new Date(t.closeTime).getTime() - new Date(t.openTime).getTime()) / 60000)}m
-                            </span>
-                          </div>
-                          <div className="bg-white p-3 rounded-lg border border-slate-200">
-                            <span className="block text-xs font-medium text-slate-500 mb-1">Comment</span>
-                            <span className="text-slate-900">{t.comment || 'N/A'}</span>
-                          </div>
-                          <div className="bg-white p-3 rounded-lg border border-slate-200">
-                            <span className="block text-xs font-medium text-slate-500 mb-1">Magic Number</span>
-                            <span className="text-slate-900">{t.magic || 'Manual'}</span>
-                          </div>
-                          <div className="bg-white p-3 rounded-lg border border-slate-200">
-                            <span className="block text-xs font-medium text-slate-500 mb-1">Stop Loss (SL)</span>
-                            <span className="font-mono text-slate-900">{t.sl ? t.sl.toFixed(5) : 'Not Set'}</span>
-                          </div>
-                          <div className="bg-white p-3 rounded-lg border border-slate-200">
-                            <span className="block text-xs font-medium text-slate-500 mb-1">Take Profit (TP)</span>
-                            <span className="font-mono text-slate-900">{t.tp ? t.tp.toFixed(5) : 'Not Set'}</span>
-                          </div>
-                          <div className="bg-white p-3 rounded-lg border border-slate-200">
-                            <span className="block text-xs font-medium text-slate-500 mb-1">Entry Reason</span>
-                            <span className="text-slate-900">{t.entryReason || 'N/A'}</span>
-                          </div>
-                          <div className="bg-white p-3 rounded-lg border border-slate-200">
-                            <span className="block text-xs font-medium text-slate-500 mb-1">Exit Reason</span>
-                            <span className="text-slate-900">{t.exitReason || 'N/A'}</span>
-                          </div>
-                          <div className="col-span-1 md:col-span-2 lg:col-span-4 bg-white p-3 rounded-lg border border-slate-200">
-                            <span className="block text-xs font-medium text-slate-500 mb-1">Trade Notes</span>
-                            <span className="text-slate-900">{t.notes || 'No notes available for this trade.'}</span>
-                          </div>
+                    <tr className="bg-slate-50/50 dark:bg-slate-900/30 border-b border-slate-200 dark:border-slate-800">
+                      <td colSpan={6} className="px-8 py-8">
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm">
+                           <div className="flex items-center gap-2 mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
+                              <FileText className="w-5 h-5 text-indigo-500" />
+                              <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Trade execution logic</h4>
+                           </div>
+                           
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              {/* Read Only Stats for context */}
+                              <div className="space-y-4">
+                                 <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 flex flex-col justify-center">
+                                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Open Price</span>
+                                       <span className="font-mono text-lg text-slate-900 dark:text-white block font-medium">{t.openPrice.toFixed(5)}</span>
+                                    </div>
+                                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 flex flex-col justify-center">
+                                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Close Price</span>
+                                       <span className="font-mono text-lg text-slate-900 dark:text-white block font-medium">{t.closePrice.toFixed(5)}</span>
+                                    </div>
+                                 </div>
+                                 <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Stop Loss (SL)</label>
+                                       <input 
+                                          type="number" 
+                                          title="Stop Loss"
+                                          className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm dark:text-white font-mono"
+                                          value={editForm.sl || ''}
+                                          onChange={(e) => setEditForm({...editForm, sl: parseFloat(e.target.value)})}
+                                          disabled={readOnly}
+                                       />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Take Profit (TP)</label>
+                                       <input 
+                                          type="number" 
+                                          title="Take Profit"
+                                          className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm dark:text-white font-mono"
+                                          value={editForm.tp || ''}
+                                          onChange={(e) => setEditForm({...editForm, tp: parseFloat(e.target.value)})}
+                                          disabled={readOnly}
+                                       />
+                                    </div>
+                                 </div>
+                              </div>
+
+                              {/* Editable Journaling */}
+                              <div className="space-y-4">
+                                 <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Setup / Entry Reason</label>
+                                    <input 
+                                       type="text" 
+                                       placeholder="e.g. Broken support, MA crossover..."
+                                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm dark:text-white"
+                                       value={editForm.entryReason || ''}
+                                       onChange={(e) => setEditForm({...editForm, entryReason: e.target.value})}
+                                       disabled={readOnly}
+                                    />
+                                 </div>
+                                 <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Exit Context (Why Did You Close?)</label>
+                                    <input 
+                                       type="text" 
+                                       placeholder="e.g. Hit TP, trailed stop, news event..."
+                                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm dark:text-white"
+                                       value={editForm.exitReason || ''}
+                                       onChange={(e) => setEditForm({...editForm, exitReason: e.target.value})}
+                                       disabled={readOnly}
+                                    />
+                                 </div>
+                              </div>
+                           </div>
+
+                           <div className="mt-6 space-y-1.5">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Retrospective Notes (Psychology, Mistakes, Lessons)</label>
+                              <textarea 
+                                 placeholder="Record your thoughts during this trade, what went wrong, what went right..."
+                                 rows={4}
+                                 className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm dark:text-white resize-none"
+                                 value={editForm.notes || ''}
+                                 onChange={(e) => setEditForm({...editForm, notes: e.target.value})}
+                                 disabled={readOnly}
+                              />
+                           </div>
+
+                           {!readOnly && (
+                              <div className="mt-8 flex justify-end">
+                                 <button 
+                                    onClick={() => saveTradeDetails(t.id)}
+                                    className="flex items-center gap-2 px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-200 dark:shadow-none transition-all active:scale-95"
+                                 >
+                                    <Save className="w-4 h-4" />
+                                    Save Journal Entry
+                                 </button>
+                              </div>
+                           )}
                         </div>
                       </td>
                     </tr>
@@ -471,8 +410,12 @@ export function JournalView({ trades, onSyncMT5, totalCapital, readOnly }: { tra
               ))}
               {filteredTrades.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
-                    No trades found. Click "Sync MT5 History" to fetch recent trades.
+                  <td colSpan={6} className="px-6 py-20 text-center">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                       <BookOpen className="w-12 h-12 text-slate-300 dark:text-slate-700 mb-2" />
+                       <p className="text-sm font-bold text-slate-900 dark:text-white">No Trading Records</p>
+                       <p className="text-xs text-slate-500">Sync with MT5 or adjust filters to view trades.</p>
+                    </div>
                   </td>
                 </tr>
               )}
