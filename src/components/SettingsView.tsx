@@ -276,6 +276,11 @@ alter table trades add column if not exists tp numeric;
 alter table trades add column if not exists "entryReason" text;
 alter table trades add column if not exists "exitReason" text;
 alter table trades add column if not exists notes text;
+alter table trades add column if not exists commission numeric;
+alter table trades add column if not exists swap numeric;
+alter table trades add column if not exists pips numeric;
+alter table trades add column if not exists magic numeric;
+alter table trades add column if not exists comment text;
 
 -- 5. Ensure tables exist (General Setup)
 -- create table if not exists audit_logs (id text primary key, timestamp text, "userId" text, "userName" text, action text, details text, type text);

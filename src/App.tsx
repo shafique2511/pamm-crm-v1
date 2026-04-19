@@ -584,6 +584,11 @@ export default function App() {
 -- alter table investors add column if not exists "ibCommissionRate" numeric;
 -- alter table managers add column if not exists "allowInvestorWithdrawals" boolean;
 -- alter table managers add column if not exists "defaultFeePercentage" numeric;
+-- alter table trades add column if not exists commission numeric;
+-- alter table trades add column if not exists swap numeric;
+-- alter table trades add column if not exists pips numeric;
+-- alter table trades add column if not exists magic numeric;
+-- alter table trades add column if not exists comment text;
 
 create table if not exists investors (
   id uuid default gen_random_uuid() primary key,
