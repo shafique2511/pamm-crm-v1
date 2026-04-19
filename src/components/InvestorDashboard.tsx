@@ -104,19 +104,49 @@ export function InvestorDashboard({
             element.style.backgroundColor = '#ffffff';
             element.style.padding = '20px';
             
-            // Recursively transform all elements in the clone to convert oklch to a format html2canvas understands
+            // Add a style block to the cloned document to override common oklch-related variables
+            const styleTag = clonedDoc.createElement('style');
+            styleTag.innerHTML = `
+              * { 
+                --color-blue-500: #3b82f6 !important;
+                --color-slate-900: #0f172a !important;
+                --color-slate-500: #64748b !important;
+              }
+              .pdf-capture oklch { font-family: inherit !important; }
+            `;
+            clonedDoc.head.appendChild(styleTag);
+            
+            // Recursively transform all elements in the clone
             const allElements = element.getElementsByTagName('*');
             for (let i = 0; i < allElements.length; i++) {
               const el = allElements[i] as HTMLElement;
               const style = clonedDoc.defaultView?.getComputedStyle(el);
               if (style) {
-                // Check common color properties
-                ['color', 'backgroundColor', 'borderColor', 'outlineColor', 'stopColor', 'fill', 'stroke'].forEach(prop => {
-                  const val = style.getPropertyValue(prop);
+                // Check all possible color properties using kebap-case for precision
+                ['color', 'background-color', 'border-color', 'outline-color', 'stop-color', 'fill', 'stroke', 'background-image'].forEach(prop => {
+                  try {
+                    const val = style.getPropertyValue(prop);
+                    if (val && val.includes('oklch')) {
+                      // More specific fallbacks based on property
+                      let fallback = '#334155';
+                      if (prop.includes('background')) fallback = '#ffffff';
+                      if (val.includes('0.632') || val.includes('0.16')) fallback = '#3b82f6'; // Map common blues
+                      
+                      const sanitized = val.replace(/oklch\([^)]+\)/g, fallback);
+                      el.style.setProperty(prop, sanitized, 'important');
+                    }
+                  } catch (e) {
+                    // Ignore style calculation errors
+                  }
+                });
+              }
+              
+              // Handle SVG attributes directly
+              if (el.tagName.toLowerCase() === 'svg' || el.parentElement?.tagName.toLowerCase() === 'svg') {
+                ['fill', 'stroke', 'stop-color'].forEach(attr => {
+                  const val = el.getAttribute(attr);
                   if (val && val.includes('oklch')) {
-                    // Force standard colors as fallbacks for specific properties if detected
-                    // This is a brutal but effective bypass for html2canvas oklch parsing
-                    el.style.setProperty(prop, val.replace(/oklch\([^)]+\)/g, '#334155'), 'important');
+                    el.setAttribute(attr, '#64748b');
                   }
                 });
               }
