@@ -3,7 +3,7 @@ import { Investor, PeriodHistory, Transaction, Trade } from '../types';
 import { formatCurrency as globalFormatCurrency } from '../lib/utils';
 import { parsePositiveMoney, toFiniteMoney } from '../lib/money';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, Shield, ArrowRightLeft, Percent, PieChart as PieChartIcon, Download, Loader2, ArrowUpRight, ArrowDownRight, Activity } from 'lucide-react';
+import { TrendingUp, DollarSign, Shield, ArrowRightLeft, Percent, PieChart as PieChartIcon, Download, Loader2, ArrowUpRight, ArrowDownRight, Activity } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 

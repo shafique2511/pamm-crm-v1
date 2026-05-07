@@ -5,8 +5,8 @@ import { formatDate, formatDateTime, formatTime, toTimestamp } from '../lib/date
 import { toFiniteMoney } from '../lib/money';
 import { 
   Clock, Search, ArrowUpRight, Users, CheckCircle2, XCircle, 
-  ArrowUpDown, Filter, Eye, X, CreditCard, Hash, Tag, 
-  Wallet, Calendar, ShieldCheck, FileText, MoreVertical
+  ArrowUpDown, Eye, X, CreditCard, Hash, 
+  Wallet, Calendar, ShieldCheck, FileText
 } from 'lucide-react';
 
 type SortKey = keyof Transaction | 'investorName';
@@ -155,7 +155,7 @@ export function ManagerWithdrawalsView({ transactions, investors, onUpdateStatus
         )}
 
         <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative flex-1 min-w-50">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
               type="text" 
@@ -186,6 +186,18 @@ export function ManagerWithdrawalsView({ transactions, investors, onUpdateStatus
               <option value="Crypto">Path: CRYPTO</option>
               <option value="Internal">Path: INTERNAL</option>
             </select>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="px-4 py-3 text-[10px] font-black uppercase tracking-widest bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none dark:text-white"
+            />
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="px-4 py-3 text-[10px] font-black uppercase tracking-widest bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none dark:text-white"
+            />
           </div>
         </div>
       </div>

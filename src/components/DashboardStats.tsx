@@ -81,7 +81,6 @@ export function DashboardStats({ investors, transactions, trades = [], history =
   // Approximate Max Drawdown from Period History
   let peak = 0;
   let maxDrawdown = 0;
-  let currentCapital = 0;
   
   const capitalHistory = history.map(h => h.investorSnapshots.reduce((sum, s) => sum + s.endingCapital, 0));
   capitalHistory.push(totalEndingCapital); // Include current state

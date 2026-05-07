@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Investor, Transaction } from '../types';
-import { formatCurrency, formatPercent } from '../lib/utils';
+import { formatCurrency } from '../lib/utils';
 import { toFiniteMoney } from '../lib/money';
 import { Edit2, Trash2, QrCode, Check, FileText, ArrowUpDown, Circle, UserCheck, UserMinus, ShieldAlert, Calendar, UserPlus } from 'lucide-react';
 import { InvoiceModal } from './InvoiceModal';

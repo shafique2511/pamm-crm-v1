@@ -138,34 +138,41 @@ export default function App() {
     setIsLoading(true);
     
     try {
+      const fetchErrors: unknown[] = [];
+
       // Fetch investors
       const { data: invData, error: invError } = await supabase!.from('investors').select('*').order('investorName');
-      if (invError) throw invError;
-      if (invData) setInvestors(invData);
+      if (invError) fetchErrors.push(invError);
+      else if (invData) setInvestors(invData);
 
       // Fetch managers
       const { data: manData, error: manError } = await supabase!.from('managers').select('*');
-      if (manError) throw manError;
-      if (manData && manData.length > 0) setManagers(manData);
+      if (manError) fetchErrors.push(manError);
+      else if (manData && manData.length > 0) setManagers(manData);
       
       // Fetch transactions
       const { data: txData, error: txError } = await supabase!.from('transactions').select('*').order('date', { ascending: false });
-      if (txError) throw txError;
-      if (txData) setTransactions(txData);
+      if (txError) fetchErrors.push(txError);
+      else if (txData) setTransactions(txData);
 
       // Fetch trades
       const { data: tradeData, error: tradeError } = await supabase!.from('trades').select('*').order('closeTime', { ascending: false });
-      if (tradeError) throw tradeError;
-      if (tradeData) setTrades(tradeData);
+      if (tradeError) fetchErrors.push(tradeError);
+      else if (tradeData) setTrades(tradeData);
 
       // Fetch period history
       const { data: historyData, error: historyError } = await supabase!.from('period_history').select('*').order('date', { ascending: false });
-      if (historyError) throw historyError;
-      if (historyData) setPeriodHistory(historyData);
+      if (historyError) fetchErrors.push(historyError);
+      else if (historyData) setPeriodHistory(historyData);
 
       // Fetch audit logs
       const { data: auditData } = await supabase!.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(100);
       if (auditData) setAuditLogs(auditData);
+
+      if (fetchErrors.length > 0) {
+        console.error("Some Supabase data failed to load:", fetchErrors);
+        alert("Some database records failed to load. Please check your connection and permissions.");
+      }
     } catch (error) {
       console.error("Error fetching data from Supabase:", error);
       // We could throw here to trigger ErrorBoundary, but it might be better to just show an alert or let it fail gracefully
@@ -426,7 +433,7 @@ export default function App() {
       {
         id: window.crypto?.randomUUID?.() ?? Math.random().toString(36).substring(2, 15),
         ticket: Math.floor(Math.random() * 100000000).toString(),
-        openTime: new Date(Date.now() - 86400000 * 1).toISOString(),
+        openTime: new Date(Date.now() - 86400000).toISOString(),
         closeTime: new Date().toISOString(),
         symbol: 'XAUUSD',
         type: 'buy',
@@ -1105,7 +1112,6 @@ create table if not exists audit_logs (
               trades={trades} 
               onSyncMT5={handleSyncMT5} 
               onUpdateTrade={handleUpdateTrade}
-              totalCapital={investors.reduce((sum, inv) => sum + inv.startingCapital, 0)}
               readOnly={!isAdmin || isReadOnly('canSyncMT5')}
             />
           )}

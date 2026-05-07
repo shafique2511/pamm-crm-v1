@@ -3,10 +3,10 @@ import { Trade } from '../types';
 import { formatCurrency } from '../lib/utils';
 import { toFiniteMoney } from '../lib/money';
 import { formatDate, formatDateTime, toTimestamp } from '../lib/date';
-import { RefreshCw, BookOpen, ArrowUpRight, ArrowDownRight, Search, TrendingUp, TrendingDown, Target, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Save, Edit3, Briefcase, Activity, FileText } from 'lucide-react';
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { RefreshCw, BookOpen, ArrowUpRight, ArrowDownRight, Search, TrendingUp, TrendingDown, Target, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Save, Briefcase, Activity, FileText } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-export function JournalView({ trades, onSyncMT5, onUpdateTrade, totalCapital, readOnly }: { trades: Trade[], onSyncMT5: () => Promise<{success: boolean, count: number, error?: string}>, onUpdateTrade?: (id: string, updates: Partial<Trade>) => void, totalCapital: number, readOnly?: boolean }) {
+export function JournalView({ trades, onSyncMT5, onUpdateTrade, readOnly }: { trades: Trade[], onSyncMT5: () => Promise<{success: boolean, count: number, error?: string}>, onUpdateTrade?: (id: string, updates: Partial<Trade>) => void, readOnly?: boolean }) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'win' | 'loss'>('all');

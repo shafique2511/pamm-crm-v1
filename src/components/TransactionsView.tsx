@@ -3,9 +3,9 @@ import { Transaction, Investor } from '../types';
 import { formatCurrency } from '../lib/utils';
 import { parsePositiveMoney, toFiniteMoney } from '../lib/money';
 import { 
-  Plus, ArrowDownCircle, ArrowUpCircle, Wallet, Search, Filter, 
+  Plus, ArrowDownCircle, ArrowUpCircle, Wallet, Search, 
   ArrowUpDown, Download, CheckCircle2, XCircle, Clock, Hash, 
-  CreditCard, Tag, ExternalLink, MoreVertical, X, Eye, FileText, Shield, RotateCcw
+  CreditCard, X, Eye, FileText, Shield, RotateCcw
 } from 'lucide-react';
 
 type SortKey = keyof Transaction | 'investorName';
@@ -29,7 +29,7 @@ export function TransactionsView({ transactions, investors, onAddTransaction, on
   // New Filters
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [investorFilter, setInvestorFilter] = useState('all');
+  const [investorFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'pending' | 'rejected'>('all');
   const [amountMin, setAmountMin] = useState('');
   const [amountMax, setAmountMax] = useState('');

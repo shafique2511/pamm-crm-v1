@@ -1,3 +1,5 @@
+-- noinspection SqlNoDataSourceInspection
+
 -- Production-oriented Supabase/PostgreSQL schema for the simple proportional PAMM model.
 -- This is a draft migration. Review against existing production data before running.
 

@@ -4,8 +4,8 @@ import { formatCurrency } from '../lib/utils';
 import { toFiniteMoney } from '../lib/money';
 import { PieChart as PieChartIcon, BarChart3, TrendingUp, Download, Users, FileText, Loader2, ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell,
-  PieChart, Pie, Legend, AreaChart, Area
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
+  PieChart, Pie, Legend
 } from 'recharts';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -22,7 +22,6 @@ export function ReportsView({ investors, transactions }: { investors: Investor[]
   const managerBalance = totalFeesCollected - managerWithdrawals;
 
   const totalNetProfit = investors.reduce((sum, inv) => sum + toFiniteMoney(inv.netProfit), 0);
-  const activeInvestors = investors.filter(i => i.status === 'active' || !i.status).length;
   const averageAccountSize = investors.length > 0 ? totalCapital / investors.length : 0;
 
   // Group stats for chart
@@ -45,10 +44,13 @@ export function ReportsView({ investors, transactions }: { investors: Investor[]
     return acc;
   }, {} as Record<string, number>);
 
-  const statusData = Object.entries(statuses).map(([name, value]) => ({ name, value }));
-
   const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#64748b'];
   const STATUS_COLORS = ['#10b981', '#f59e0b', '#ef4444'];
+  const statusData = Object.entries(statuses).map(([name, value], index) => ({
+    name,
+    value,
+    fill: STATUS_COLORS[index % STATUS_COLORS.length],
+  }));
 
   const exportToCSV = async () => {
     setIsExportingCSV(true);
@@ -237,11 +239,7 @@ export function ReportsView({ investors, transactions }: { investors: Investor[]
                       contentStyle={{ backgroundColor: 'var(--tw-prose-body)', borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)', padding: '12px' }}
                       cursor={{fill: '#94a3b8', opacity: 0.1}}
                     />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={60}>
-                      {groupData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Bar>
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={60} fill={COLORS[0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -270,11 +268,7 @@ export function ReportsView({ investors, transactions }: { investors: Investor[]
                       paddingAngle={5}
                       dataKey="value"
                       stroke="none"
-                    >
-                      {statusData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={STATUS_COLORS[index % STATUS_COLORS.length]} />
-                      ))}
-                    </Pie>
+                    />
                     <RechartsTooltip 
                       formatter={(value: number) => [`${value} accounts`, 'Count']}
                       contentStyle={{ backgroundColor: 'var(--tw-prose-body)', borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
