@@ -1071,6 +1071,7 @@ create table if not exists audit_logs (
               <InvestorsTable 
                 investors={visibleInvestors} 
                 availableGroups={managers[0]?.investorGroups || ['Default', 'VIP', 'Standard']}
+                transactions={transactions}
                 enableIBModule={managers[0]?.enableIBModule || false}
                 onUpdateInvestor={handleUpdateInvestor}
                 onDeleteInvestor={handleDeleteInvestor}

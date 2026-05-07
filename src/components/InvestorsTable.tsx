@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Investor } from '../types';
+import { Investor, Transaction } from '../types';
 import { formatCurrency, formatPercent } from '../lib/utils';
 import { toFiniteMoney } from '../lib/money';
 import { Edit2, Trash2, QrCode, Check, FileText, ArrowUpDown, Circle, UserCheck, UserMinus, ShieldAlert, Calendar, UserPlus } from 'lucide-react';
@@ -8,6 +8,7 @@ import { InvoiceModal } from './InvoiceModal';
 
 interface InvestorsTableProps {
   investors: Investor[];
+  transactions?: Transaction[];
   availableGroups: string[];
   enableIBModule?: boolean;
   onUpdateInvestor: (id: string, updates: Partial<Investor>) => void;
@@ -18,7 +19,7 @@ interface InvestorsTableProps {
 
 type SortKey = keyof Investor | 'roi';
 
-export function InvestorsTable({ investors, availableGroups, enableIBModule, onUpdateInvestor, onDeleteInvestor, isAdmin, readOnly }: InvestorsTableProps) {
+export function InvestorsTable({ investors, transactions = [], availableGroups, enableIBModule, onUpdateInvestor, onDeleteInvestor, isAdmin, readOnly }: InvestorsTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<Investor>>({});
   const [showQR, setShowQR] = useState<string | null>(null);
@@ -419,6 +420,7 @@ export function InvestorsTable({ investors, availableGroups, enableIBModule, onU
       {invoiceInvestor && (
         <InvoiceModal 
           investor={invoiceInvestor} 
+          transactions={transactions}
           onClose={() => setInvoiceInvestor(null)} 
         />
       )}

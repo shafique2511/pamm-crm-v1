@@ -1,18 +1,23 @@
-import React, { useRef, useState } from 'react';
-import { Investor } from '../types';
+import React, { useMemo, useRef, useState } from 'react';
+import { Investor, Transaction } from '../types';
 import { formatCurrency, formatPercent } from '../lib/utils';
+import { buildStatementPayload } from '../lib/statement';
+import { formatDate } from '../lib/date';
 import { X, Printer, Download, Building, Building2, CheckCircle2, Loader2, Info } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
 interface InvoiceModalProps {
   investor: Investor;
+  transactions?: Transaction[];
   onClose: () => void;
 }
 
-export function InvoiceModal({ investor, onClose }: InvoiceModalProps) {
+export function InvoiceModal({ investor, transactions = [], onClose }: InvoiceModalProps) {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+  const [generatedAt] = useState(() => new Date().toISOString());
+  const statement = useMemo(() => buildStatementPayload(investor, transactions, generatedAt), [investor, transactions, generatedAt]);
 
   const handlePrint = () => {
     window.print();
@@ -36,7 +41,7 @@ export function InvoiceModal({ investor, onClose }: InvoiceModalProps) {
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Statement_${investor.investorName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+      pdf.save(`Statement_${statement.investor.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Failed to generate PDF statement.');
@@ -45,8 +50,8 @@ export function InvoiceModal({ investor, onClose }: InvoiceModalProps) {
     }
   };
 
-  const invoiceNumber = `INV-${investor.id.toUpperCase().substring(0, 8)}-${new Date().getTime().toString().slice(-4)}`;
-  const displayCurrency = investor.baseCurrency || 'USD';
+  const invoiceNumber = statement.statementNumber;
+  const displayCurrency = statement.investor.baseCurrency;
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 font-sans print:p-0 print:bg-white print:block">
@@ -119,7 +124,7 @@ export function InvoiceModal({ investor, onClose }: InvoiceModalProps) {
             <div className="grid grid-cols-2 gap-8 mb-12">
               <div className="p-6 bg-slate-50/50 outline outline-1 outline-slate-100 rounded-2xl">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Prepared For</p>
-                <h3 className="text-2xl font-black text-slate-900 mb-2">{investor.investorName}</h3>
+                <h3 className="text-2xl font-black text-slate-900 mb-2">{statement.investor.name}</h3>
                 <div className="space-y-1">
                   {investor.idNumber && <p className="text-sm font-medium text-slate-600"><span className="text-slate-400">ID:</span> {investor.idNumber}</p>}
                   {investor.address && <p className="text-sm font-medium text-slate-600"><span className="text-slate-400">Addr:</span> {investor.address}</p>}
@@ -137,7 +142,7 @@ export function InvoiceModal({ investor, onClose }: InvoiceModalProps) {
                 <div className="grid grid-cols-2 gap-y-6">
                   <div>
                     <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Account Group</p>
-                    <p className="font-bold text-indigo-900">{investor.group || 'Standard'}</p>
+                    <p className="font-bold text-indigo-900">{statement.investor.group}</p>
                   </div>
                   <div>
                     <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Base Currency</p>
@@ -145,7 +150,7 @@ export function InvoiceModal({ investor, onClose }: InvoiceModalProps) {
                   </div>
                   <div>
                     <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">High Water Mark</p>
-                    <p className="font-bold text-indigo-900">{formatCurrency(investor.highWaterMark, displayCurrency)}</p>
+                    <p className="font-bold text-indigo-900">{formatCurrency(statement.capital.highWaterMark, displayCurrency)}</p>
                   </div>
                   <div>
                     <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Fee Structure</p>
@@ -167,7 +172,15 @@ export function InvoiceModal({ investor, onClose }: InvoiceModalProps) {
                 <tbody className="divide-y divide-slate-100 bg-white">
                   <tr>
                     <td className="px-6 py-5 text-slate-600 font-medium">Starting Capital for Period</td>
-                    <td className="px-6 py-5 text-right font-bold text-slate-900">{formatCurrency(investor.startingCapital, displayCurrency)}</td>
+                    <td className="px-6 py-5 text-right font-bold text-slate-900">{formatCurrency(statement.capital.startingCapital, displayCurrency)}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-6 py-5 text-slate-600 font-medium">Approved Deposits</td>
+                    <td className="px-6 py-5 text-right font-bold text-emerald-600">+{formatCurrency(statement.capital.approvedDeposits, displayCurrency)}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-6 py-5 text-slate-600 font-medium">Approved Withdrawals</td>
+                    <td className="px-6 py-5 text-right font-bold text-rose-600">-{formatCurrency(statement.capital.approvedWithdrawals, displayCurrency)}</td>
                   </tr>
                   <tr>
                     <td className="px-6 py-5 text-slate-600 font-medium">
@@ -177,7 +190,7 @@ export function InvoiceModal({ investor, onClose }: InvoiceModalProps) {
                       </div>
                     </td>
                     <td className="px-6 py-5 text-right font-bold text-emerald-600">
-                      {investor.individualProfitShare > 0 ? '+' : ''}{formatCurrency(investor.individualProfitShare, displayCurrency)}
+                      {statement.capital.grossPnlAllocation > 0 ? '+' : ''}{formatCurrency(statement.capital.grossPnlAllocation, displayCurrency)}
                     </td>
                   </tr>
                   {investor.lossCarryover > 0 && (
@@ -189,7 +202,7 @@ export function InvoiceModal({ investor, onClose }: InvoiceModalProps) {
                         </div>
                       </td>
                       <td className="px-6 py-5 text-right font-bold text-rose-600">
-                        -{formatCurrency(Math.min(investor.lossCarryover, Math.max(0, investor.individualProfitShare)), displayCurrency)}
+                        -{formatCurrency(Math.min(investor.lossCarryover, Math.max(0, statement.capital.grossPnlAllocation)), displayCurrency)}
                       </td>
                     </tr>
                   )}
@@ -198,13 +211,13 @@ export function InvoiceModal({ investor, onClose }: InvoiceModalProps) {
                       Management Performance Fee Deducted
                     </td>
                     <td className="px-6 py-5 text-right font-bold text-rose-600">
-                      -{formatCurrency(investor.yourFee, displayCurrency)}
+                      -{formatCurrency(statement.capital.performanceFee, displayCurrency)}
                     </td>
                   </tr>
                   <tr className="bg-slate-50">
                     <td className="px-6 py-5 font-black text-slate-900 uppercase tracking-widest text-xs">Period Net Profit</td>
-                    <td className={`px-6 py-5 text-right font-black text-lg ${investor.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      {investor.netProfit > 0 ? '+' : ''}{formatCurrency(investor.netProfit, displayCurrency)}
+                    <td className={`px-6 py-5 text-right font-black text-lg ${statement.capital.netPnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {statement.capital.netPnl > 0 ? '+' : ''}{formatCurrency(statement.capital.netPnl, displayCurrency)}
                     </td>
                   </tr>
                 </tbody>
@@ -219,12 +232,12 @@ export function InvoiceModal({ investor, onClose }: InvoiceModalProps) {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-slate-600 font-medium text-sm">Target Reinvested Amount</span>
-                    <span className="font-bold text-slate-900">{formatCurrency(investor.reinvestAmt, displayCurrency)}</span>
+                    <span className="font-bold text-slate-900">{formatCurrency(statement.capital.targetReinvestedAmount, displayCurrency)}</span>
                   </div>
                   <div className="w-full h-px bg-slate-100"></div>
                   <div className="flex justify-between items-center">
                     <span className="text-slate-600 font-medium text-sm">Target Cash Payout</span>
-                    <span className="font-black text-blue-600 text-lg">{formatCurrency(investor.cashPayout, displayCurrency)}</span>
+                    <span className="font-black text-blue-600 text-lg">{formatCurrency(statement.capital.targetCashPayout, displayCurrency)}</span>
                   </div>
                 </div>
               </div>
@@ -235,12 +248,12 @@ export function InvoiceModal({ investor, onClose }: InvoiceModalProps) {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-slate-600 font-medium text-sm">Total Fee Collected</span>
-                    <span className="font-bold text-emerald-600">{formatCurrency(investor.feeCollected, displayCurrency)}</span>
+                    <span className="font-bold text-emerald-600">{formatCurrency(statement.capital.totalFeeCollected, displayCurrency)}</span>
                   </div>
                   <div className="w-full h-px bg-slate-100"></div>
                   <div className="flex justify-between items-center">
                     <span className="text-slate-600 font-medium text-sm">Outstanding Fee Balance</span>
-                    <span className="font-black text-amber-600 text-lg">{formatCurrency(investor.unpaidFee, displayCurrency)}</span>
+                    <span className="font-black text-amber-600 text-lg">{formatCurrency(statement.capital.outstandingFeeBalance, displayCurrency)}</span>
                   </div>
                 </div>
               </div>
@@ -252,8 +265,33 @@ export function InvoiceModal({ investor, onClose }: InvoiceModalProps) {
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Final Asset Value</span>
                 <span className="text-sm font-medium text-slate-300">Total Ending Capital for the period</span>
               </div>
-              <span className="text-4xl font-black tracking-tight text-white">{formatCurrency(investor.endingCapital, displayCurrency)}</span>
+              <span className="text-4xl font-black tracking-tight text-white">{formatCurrency(statement.capital.endingCapital, displayCurrency)}</span>
             </div>
+
+            {statement.transactions.length > 0 && (
+              <div className="mt-10 rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead className="bg-slate-50 text-slate-500 uppercase tracking-widest font-black">
+                    <tr>
+                      <th className="px-4 py-3">Date</th>
+                      <th className="px-4 py-3">Type</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {statement.transactions.slice(0, 12).map(tx => (
+                      <tr key={tx.id}>
+                        <td className="px-4 py-3 text-slate-600">{formatDate(tx.date)}</td>
+                        <td className="px-4 py-3 text-slate-700 capitalize">{tx.type.replace('_', ' ')}</td>
+                        <td className="px-4 py-3 text-slate-500 capitalize">{tx.status}</td>
+                        <td className="px-4 py-3 text-right font-bold text-slate-900">{formatCurrency(tx.amount, displayCurrency)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {/* Footer */}
             <div className="mt-16 text-center">
