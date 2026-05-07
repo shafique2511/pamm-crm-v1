@@ -1170,6 +1170,7 @@ create table if not exists audit_logs (
           {activeTab === 'affiliates' && managers[0]?.enableIBModule && hasPermission('canViewAffiliates', true) && (
             <AffiliatesView 
               investors={investors} 
+              periodHistory={periodHistory}
               currentUser={user} 
               isAdmin={isAdmin} 
             />

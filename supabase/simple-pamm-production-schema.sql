@@ -9,6 +9,9 @@ create type public.transaction_status as enum ('pending', 'completed', 'rejected
 create type public.capital_transaction_type as enum ('deposit', 'withdrawal', 'correction');
 create type public.wallet_entry_type as enum ('performance_fee_credit', 'manager_withdrawal_debit', 'manual_adjustment');
 create type public.sync_status as enum ('started', 'success', 'failed', 'partial');
+create type public.ib_commission_source as enum ('performance_fee', 'deposit', 'custom');
+create type public.ib_commission_status as enum ('pending', 'approved', 'paid', 'void');
+create type public.ib_payout_status as enum ('pending', 'approved', 'rejected', 'paid');
 
 create table if not exists public.manager_profiles (
   id uuid primary key default gen_random_uuid(),
@@ -35,9 +38,27 @@ create table if not exists public.investor_profiles (
   phone text,
   country text,
   bank_account text,
+  referred_by text,
+  referral_code text,
+  ib_commission_rate numeric(9,6),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  check (performance_fee_percent >= 0)
+  check (performance_fee_percent >= 0),
+  check (ib_commission_rate is null or ib_commission_rate >= 0)
+);
+
+create table if not exists public.ib_referral_codes (
+  id uuid primary key default gen_random_uuid(),
+  manager_id uuid not null references public.manager_profiles(id) on delete cascade,
+  ib_name text not null,
+  referral_code text not null,
+  commission_rate numeric(9,6),
+  is_active boolean not null default true,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (manager_id, referral_code),
+  check (commission_rate is null or commission_rate >= 0)
 );
 
 create table if not exists public.capital_transactions (
@@ -111,6 +132,38 @@ create table if not exists public.manager_wallet_ledger (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.ib_commission_ledger (
+  id uuid primary key default gen_random_uuid(),
+  manager_id uuid not null references public.manager_profiles(id) on delete cascade,
+  ib_referral_code_id uuid references public.ib_referral_codes(id) on delete set null,
+  ib_name text not null,
+  investor_id uuid not null references public.investor_profiles(id) on delete restrict,
+  period_id uuid references public.period_history(id) on delete set null,
+  source public.ib_commission_source not null default 'performance_fee',
+  base_amount numeric(20,6) not null check (base_amount >= 0),
+  commission_rate numeric(9,6) not null check (commission_rate >= 0),
+  commission_amount numeric(20,6) not null check (commission_amount >= 0),
+  status public.ib_commission_status not null default 'approved',
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  unique (manager_id, investor_id, period_id, source)
+);
+
+create table if not exists public.ib_payout_requests (
+  id uuid primary key default gen_random_uuid(),
+  manager_id uuid not null references public.manager_profiles(id) on delete cascade,
+  ib_referral_code_id uuid references public.ib_referral_codes(id) on delete set null,
+  ib_name text not null,
+  amount numeric(20,6) not null check (amount > 0),
+  status public.ib_payout_status not null default 'pending',
+  requested_by uuid references auth.users(id) on delete set null,
+  approved_by uuid references auth.users(id) on delete set null,
+  paid_by uuid references auth.users(id) on delete set null,
+  requested_at timestamptz not null default now(),
+  resolved_at timestamptz,
+  notes text
+);
+
 create table if not exists public.trades (
   id uuid primary key default gen_random_uuid(),
   manager_id uuid not null references public.manager_profiles(id) on delete cascade,
@@ -172,11 +225,15 @@ create table if not exists public.audit_logs (
 );
 
 create index if not exists investor_profiles_manager_idx on public.investor_profiles (manager_id);
+create index if not exists investor_profiles_referral_idx on public.investor_profiles (manager_id, referred_by) where referred_by is not null;
+create index if not exists ib_referral_codes_manager_idx on public.ib_referral_codes (manager_id, referral_code) where is_active;
 create index if not exists capital_transactions_manager_status_idx on public.capital_transactions (manager_id, status, effective_at);
 create index if not exists capital_transactions_investor_idx on public.capital_transactions (investor_id, status, effective_at);
 create index if not exists profit_distributions_period_idx on public.profit_distributions (period_id);
 create index if not exists fee_ledger_manager_idx on public.fee_ledger (manager_id, created_at desc);
 create index if not exists manager_wallet_ledger_manager_idx on public.manager_wallet_ledger (manager_id, created_at desc);
+create index if not exists ib_commission_ledger_manager_idx on public.ib_commission_ledger (manager_id, ib_name, created_at desc);
+create index if not exists ib_payout_requests_manager_idx on public.ib_payout_requests (manager_id, status, requested_at desc);
 create index if not exists trades_manager_close_idx on public.trades (manager_id, close_time desc);
 create index if not exists statement_snapshots_investor_idx on public.statement_snapshots (investor_id, generated_at desc);
 create index if not exists sync_logs_manager_idx on public.sync_logs (manager_id, started_at desc);
@@ -208,10 +265,13 @@ $$;
 alter table public.manager_profiles enable row level security;
 alter table public.investor_profiles enable row level security;
 alter table public.capital_transactions enable row level security;
+alter table public.ib_referral_codes enable row level security;
 alter table public.period_history enable row level security;
 alter table public.profit_distributions enable row level security;
 alter table public.fee_ledger enable row level security;
 alter table public.manager_wallet_ledger enable row level security;
+alter table public.ib_commission_ledger enable row level security;
+alter table public.ib_payout_requests enable row level security;
 alter table public.trades enable row level security;
 alter table public.statement_snapshots enable row level security;
 alter table public.sync_logs enable row level security;
@@ -234,6 +294,9 @@ for select using (
   or investor_id in (select id from public.investor_profiles where user_id = (select auth.uid()))
 );
 
+create policy ib_referral_codes_manager_read on public.ib_referral_codes
+for select using ((select public.is_super_admin()) or manager_id = (select public.current_manager_id()));
+
 create policy manager_owned_periods_read on public.period_history
 for select using ((select public.is_super_admin()) or manager_id = (select public.current_manager_id()));
 
@@ -248,6 +311,12 @@ create policy manager_owned_fee_ledger_read on public.fee_ledger
 for select using ((select public.is_super_admin()) or manager_id = (select public.current_manager_id()));
 
 create policy manager_owned_wallet_read on public.manager_wallet_ledger
+for select using ((select public.is_super_admin()) or manager_id = (select public.current_manager_id()));
+
+create policy ib_commission_ledger_manager_read on public.ib_commission_ledger
+for select using ((select public.is_super_admin()) or manager_id = (select public.current_manager_id()));
+
+create policy ib_payout_requests_manager_read on public.ib_payout_requests
 for select using ((select public.is_super_admin()) or manager_id = (select public.current_manager_id()));
 
 create policy manager_owned_trades_read on public.trades

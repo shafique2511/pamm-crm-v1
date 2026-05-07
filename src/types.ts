@@ -40,6 +40,38 @@ export interface Investor {
   unpaidFee: number;
 }
 
+export interface IBCommissionTier {
+  minReferredCapital: number;
+  maxReferredCapital: number | null;
+  commissionRate: number;
+}
+
+export interface IBCommissionLedgerEntry {
+  id: string;
+  ibId: string;
+  ibName: string;
+  investorId: string;
+  investorName: string;
+  periodId?: string;
+  source: 'performance_fee' | 'deposit' | 'custom';
+  baseAmount: number;
+  commissionRate: number;
+  commissionAmount: number;
+  status: 'pending' | 'approved' | 'paid' | 'void';
+  createdAt: string;
+}
+
+export interface IBPayoutRequest {
+  id: string;
+  ibId: string;
+  ibName: string;
+  amount: number;
+  status: 'pending' | 'approved' | 'rejected' | 'paid';
+  requestedAt: string;
+  resolvedAt?: string;
+  notes?: string;
+}
+
 export interface AccessPermissions {
   canEditInvestors?: boolean;
   canManageTransactions?: boolean;
