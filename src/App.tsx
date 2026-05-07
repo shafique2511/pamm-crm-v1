@@ -19,6 +19,7 @@ import { Plus, Calculator, Database, Copy, CheckCircle2, Menu, Search, Filter } 
 import { supabase } from './lib/supabase';
 import { toFiniteMoney } from './lib/money';
 import { calculateSimplePammDistribution } from './lib/simplePamm';
+import { applyCompletedCapitalTransaction } from './lib/capitalTransactions';
 
 const INITIAL_MANAGERS: Manager[] = [
   { id: '1', username: 'admin', password: 'password', name: 'Super Admin' }
@@ -295,10 +296,22 @@ export default function App() {
   const handleAddTransaction = async (t: Partial<Transaction>) => {
     const newTx = { ...t, id: window.crypto?.randomUUID?.() ?? Math.random().toString(36).substring(2, 15) } as Transaction;
     setTransactions(prev => [newTx, ...prev]);
+    if (newTx.investorId && newTx.status === 'completed' && (newTx.type === 'deposit' || newTx.type === 'withdrawal')) {
+      setInvestors(prev => prev.map(inv => {
+        if (inv.id !== newTx.investorId) return inv;
+        const updates = applyCompletedCapitalTransaction(inv, newTx);
+        return updates ? { ...inv, ...updates } : inv;
+      }));
+    }
     logAction('Record Transaction', `Recorded ${t.type} of $${t.amount}${t.referenceId ? ` (Ref: ${t.referenceId})` : ''}`, 'transaction');
     if (supabase) {
       try {
         await supabase.from('transactions').insert([newTx]);
+        if (newTx.investorId && newTx.status === 'completed' && (newTx.type === 'deposit' || newTx.type === 'withdrawal')) {
+          const investor = investors.find(inv => inv.id === newTx.investorId);
+          const updates = investor ? applyCompletedCapitalTransaction(investor, newTx) : null;
+          if (updates) await supabase.from('investors').update(updates).eq('id', newTx.investorId);
+        }
       } catch (e) {
         console.error("Failed to add transaction", e);
         alert("Failed to record transaction in database.");
@@ -327,11 +340,8 @@ export default function App() {
     if (affectedTx.type === 'withdrawal' && affectedTx.investorId && previousStatus === 'pending' && status === 'completed') {
       const invToUpdate = investors.find(i => i.id === affectedTx!.investorId);
       if (invToUpdate) {
-        const amount = toFiniteMoney(affectedTx.amount);
-        handleUpdateInvestor(invToUpdate.id, {
-          endingCapital: toFiniteMoney(invToUpdate.endingCapital) - amount,
-          cashPayout: toFiniteMoney(invToUpdate.cashPayout) + amount
-        });
+        const updates = applyCompletedCapitalTransaction(invToUpdate, affectedTx);
+        if (updates) handleUpdateInvestor(invToUpdate.id, updates);
       }
     }
 

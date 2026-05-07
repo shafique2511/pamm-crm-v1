@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Transaction, Investor } from '../types';
 import { formatCurrency } from '../lib/utils';
+import { formatDate, formatDateTime, formatTime, toTimestamp } from '../lib/date';
+import { toFiniteMoney } from '../lib/money';
 import { 
   Clock, Search, ArrowUpRight, Users, CheckCircle2, XCircle, 
   ArrowUpDown, Filter, Eye, X, CreditCard, Hash, Tag, 
@@ -41,19 +43,20 @@ export function ManagerWithdrawalsView({ transactions, investors, onUpdateStatus
     let result = txs.filter(tx => {
       const inv = investors?.find(i => i.id === tx.investorId);
       const searchMatch = (tx.notes || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (inv?.investorName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                          ((inv?.investorName || '').toLowerCase().includes(searchTerm.toLowerCase())) ||
                           (tx.referenceId || '').toLowerCase().includes(searchTerm.toLowerCase());
       
       const statusMatch = statusFilter === 'all' || tx.status === statusFilter;
       const categoryMatch = categoryFilter === 'all' || tx.category === categoryFilter;
       
       let dateMatch = true;
-      const txTime = new Date(tx.date).getTime();
-      if (dateFrom) dateMatch = dateMatch && txTime >= new Date(dateFrom).getTime();
+      const txTime = toTimestamp(tx.date);
+      if (dateFrom && txTime !== null) dateMatch = dateMatch && txTime >= (toTimestamp(dateFrom) || 0);
       if (dateTo) {
         const endDay = new Date(dateTo).setHours(23, 59, 59, 999);
-        dateMatch = dateMatch && txTime <= endDay;
+        dateMatch = dateMatch && txTime !== null && txTime <= endDay;
       }
+      if ((dateFrom || dateTo) && txTime === null) dateMatch = false;
 
       return searchMatch && statusMatch && categoryMatch && dateMatch;
     });
@@ -77,7 +80,7 @@ export function ManagerWithdrawalsView({ transactions, investors, onUpdateStatus
   };
 
   const filteredTxs = processFilter(tab === 'manager' ? managerWithdrawalTxs : investorWithdrawalTxs);
-  const totalWithdrawnManager = managerWithdrawalTxs.filter(t => t.status === 'completed').reduce((sum, tx) => sum + tx.amount, 0);
+  const totalWithdrawnManager = managerWithdrawalTxs.filter(t => t.status === 'completed').reduce((sum, tx) => sum + toFiniteMoney(tx.amount), 0);
   const pendingInvestorRequests = investorWithdrawalTxs.filter(t => t.status === 'pending').length;
 
   const SortHeader = ({ label, sortKey }: { label: string, sortKey: SortKey }) => (
@@ -208,15 +211,15 @@ export function ManagerWithdrawalsView({ transactions, investors, onUpdateStatus
                   <tr key={tx.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-all group">
                     <td className="px-6 py-5">
                        <div className="flex flex-col">
-                         <span className="font-bold text-slate-900 dark:text-slate-100">{new Date(tx.date).toLocaleDateString()}</span>
-                         <span className="text-[10px] text-slate-400 font-mono italic">{new Date(tx.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                         <span className="font-bold text-slate-900 dark:text-slate-100">{formatDate(tx.date)}</span>
+                         <span className="text-[10px] text-slate-400 font-mono italic">{formatTime(tx.date)}</span>
                        </div>
                     </td>
                     {tab === 'investor' && (
                       <td className="px-6 py-5">
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center font-black text-xs">
-                            {inv?.investorName.charAt(0)}
+                            {inv?.investorName?.charAt(0) || '?'}
                           </div>
                           <span className="font-bold text-slate-900 dark:text-slate-100">{inv?.investorName || 'Treasury Principal'}</span>
                         </div>
@@ -224,7 +227,7 @@ export function ManagerWithdrawalsView({ transactions, investors, onUpdateStatus
                     )}
                     <td className="px-6 py-5">
                        <span className={`text-sm font-black text-rose-600`}>
-                         -{formatCurrency(tx.amount)}
+                         -{formatCurrency(toFiniteMoney(tx.amount))}
                        </span>
                     </td>
                     <td className="px-6 py-5">
@@ -339,7 +342,7 @@ export function ManagerWithdrawalsView({ transactions, investors, onUpdateStatus
                         <Calendar className="w-3.5 h-3.5" />
                         <span className="text-[10px] font-black uppercase tracking-widest">Execution Date</span>
                      </div>
-                     <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{new Date(selectedTx.date).toLocaleString()}</p>
+                     <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{formatDateTime(selectedTx.date)}</p>
                   </div>
                   <div className="space-y-1.5">
                      <div className="flex items-center gap-2 text-slate-400">

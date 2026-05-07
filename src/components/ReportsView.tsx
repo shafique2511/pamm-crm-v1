@@ -302,7 +302,7 @@ export function ReportsView({ investors, transactions }: { investors: Investor[]
           </div>
           
           <div className="space-y-3">
-            {investors
+            {[...investors]
               .sort((a, b) => b.startingCapital - a.startingCapital)
               .slice(0, 5)
               .map((inv, i) => (

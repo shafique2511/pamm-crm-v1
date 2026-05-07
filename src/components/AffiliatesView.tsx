@@ -21,7 +21,7 @@ export function AffiliatesView({ investors, currentUser, isAdmin }: AffiliatesVi
     investors.forEach(inv => {
       if (inv.referredBy) {
         // If not admin, only process if the referredBy matches the current user's name
-        if (!isAdmin && currentUser && inv.referredBy.toLowerCase() !== currentUser.name.toLowerCase()) {
+        if (!isAdmin && currentUser && (inv.referredBy || '').toLowerCase() !== currentUser.name.toLowerCase()) {
           return;
         }
 

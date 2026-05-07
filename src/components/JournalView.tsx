@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Trade } from '../types';
 import { formatCurrency } from '../lib/utils';
+import { toFiniteMoney } from '../lib/money';
+import { formatDate, formatDateTime, toTimestamp } from '../lib/date';
 import { RefreshCw, BookOpen, ArrowUpRight, ArrowDownRight, Search, TrendingUp, TrendingDown, Target, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Save, Edit3, Briefcase, Activity, FileText } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -33,25 +35,29 @@ export function JournalView({ trades, onSyncMT5, onUpdateTrade, totalCapital, re
   };
 
   const filteredTrades = trades.filter(t => {
-    const matchesSearch = t.symbol.toLowerCase().includes(searchTerm.toLowerCase()) || t.ticket.includes(searchTerm);
-    const matchesFilter = filterType === 'all' || (filterType === 'win' && t.profit > 0) || (filterType === 'loss' && t.profit <= 0);
+    const symbol = String(t.symbol || '');
+    const ticket = String(t.ticket || '');
+    const profit = toFiniteMoney(t.profit);
+    const matchesSearch = symbol.toLowerCase().includes(searchTerm.toLowerCase()) || ticket.includes(searchTerm);
+    const matchesFilter = filterType === 'all' || (filterType === 'win' && profit > 0) || (filterType === 'loss' && profit <= 0);
     const matchesTradeType = tradeType === 'all' || t.type === tradeType;
     
     let matchesDate = true;
-    const tradeDate = new Date(t.closeTime).getTime();
-    if (dateFrom) matchesDate = matchesDate && tradeDate >= new Date(dateFrom).getTime();
-    if (dateTo) matchesDate = matchesDate && tradeDate <= new Date(dateTo).getTime() + 86400000;
+    const tradeDate = toTimestamp(t.closeTime);
+    if (dateFrom && tradeDate !== null) matchesDate = matchesDate && tradeDate >= (toTimestamp(dateFrom) || 0);
+    if (dateTo && tradeDate !== null) matchesDate = matchesDate && tradeDate <= (toTimestamp(dateTo) || 0) + 86400000;
+    if ((dateFrom || dateTo) && tradeDate === null) matchesDate = false;
 
     return matchesSearch && matchesFilter && matchesTradeType && matchesDate;
   });
 
-  const totalProfit = filteredTrades.reduce((sum, t) => sum + t.profit, 0);
-  const winningTradesCount = filteredTrades.filter(t => t.profit > 0).length;
-  const losingTradesCount = filteredTrades.filter(t => t.profit <= 0).length;
+  const totalProfit = filteredTrades.reduce((sum, t) => sum + toFiniteMoney(t.profit), 0);
+  const winningTradesCount = filteredTrades.filter(t => toFiniteMoney(t.profit) > 0).length;
+  const losingTradesCount = filteredTrades.filter(t => toFiniteMoney(t.profit) <= 0).length;
   
   const winRate = filteredTrades.length > 0 ? (winningTradesCount / filteredTrades.length) * 100 : 0;
-  const grossProfit = filteredTrades.filter(t => t.profit > 0).reduce((sum, t) => sum + t.profit, 0);
-  const grossLoss = filteredTrades.filter(t => t.profit < 0).reduce((sum, t) => sum + Math.abs(t.profit), 0);
+  const grossProfit = filteredTrades.filter(t => toFiniteMoney(t.profit) > 0).reduce((sum, t) => sum + toFiniteMoney(t.profit), 0);
+  const grossLoss = filteredTrades.filter(t => toFiniteMoney(t.profit) < 0).reduce((sum, t) => sum + Math.abs(toFiniteMoney(t.profit)), 0);
   const profitFactor = grossLoss > 0 ? (grossProfit / grossLoss) : grossProfit > 0 ? Infinity : 0;
 
   const avgWin = winningTradesCount > 0 ? grossProfit / winningTradesCount : 0;
@@ -62,10 +68,10 @@ export function JournalView({ trades, onSyncMT5, onUpdateTrade, totalCapital, re
   const chartData = [...filteredTrades].reverse().reduce((acc, trade) => {
     const prevTotal = acc.length > 0 ? acc[acc.length - 1].cumulative : 0;
     acc.push({
-      ticket: trade.ticket,
-      date: new Date(trade.closeTime).toLocaleDateString(),
-      profit: trade.profit,
-      cumulative: prevTotal + trade.profit
+      ticket: trade.ticket || 'N/A',
+      date: formatDate(trade.closeTime),
+      profit: toFiniteMoney(trade.profit),
+      cumulative: prevTotal + toFiniteMoney(trade.profit)
     });
     return acc;
   }, [] as any[]);
@@ -275,14 +281,14 @@ export function JournalView({ trades, onSyncMT5, onUpdateTrade, totalCapital, re
                     </td>
                     <td className="px-6 py-5">
                        <div className="flex flex-col">
-                          <span className="font-bold text-slate-900 dark:text-slate-100">{t.symbol}</span>
-                          <span className="text-[10px] font-mono text-slate-400 mt-1 uppercase">#{t.ticket}</span>
+                          <span className="font-bold text-slate-900 dark:text-slate-100">{t.symbol || 'Unknown Symbol'}</span>
+                          <span className="text-[10px] font-mono text-slate-400 mt-1 uppercase">#{t.ticket || 'no-ticket'}</span>
                        </div>
                     </td>
                     <td className="px-6 py-5">
                        <div className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400 font-mono">
-                          <span>{new Date(t.openTime).toLocaleString()}</span>
-                          <span>{new Date(t.closeTime).toLocaleString()}</span>
+                          <span>{formatDateTime(t.openTime)}</span>
+                          <span>{formatDateTime(t.closeTime)}</span>
                        </div>
                     </td>
                     <td className="px-6 py-5">
@@ -294,11 +300,11 @@ export function JournalView({ trades, onSyncMT5, onUpdateTrade, totalCapital, re
                       </span>
                     </td>
                     <td className="px-6 py-5 font-bold text-slate-900 dark:text-slate-300">
-                      {t.volume.toFixed(2)} Lots
+                      {toFiniteMoney(t.volume).toFixed(2)} Lots
                     </td>
                     <td className="px-6 py-5 text-right">
-                      <span className={`text-sm font-black ${t.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                         {t.profit >= 0 ? '+' : ''}{formatCurrency(t.profit)}
+                      <span className={`text-sm font-black ${toFiniteMoney(t.profit) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                         {toFiniteMoney(t.profit) >= 0 ? '+' : ''}{formatCurrency(toFiniteMoney(t.profit))}
                       </span>
                     </td>
                   </tr>
@@ -319,11 +325,11 @@ export function JournalView({ trades, onSyncMT5, onUpdateTrade, totalCapital, re
                                  <div className="grid grid-cols-2 gap-4">
                                     <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 flex flex-col justify-center">
                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Open Price</span>
-                                       <span className="font-mono text-lg text-slate-900 dark:text-white block font-medium">{t.openPrice.toFixed(5)}</span>
+                                       <span className="font-mono text-lg text-slate-900 dark:text-white block font-medium">{toFiniteMoney(t.openPrice).toFixed(5)}</span>
                                     </div>
                                     <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 flex flex-col justify-center">
                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Close Price</span>
-                                       <span className="font-mono text-lg text-slate-900 dark:text-white block font-medium">{t.closePrice.toFixed(5)}</span>
+                                       <span className="font-mono text-lg text-slate-900 dark:text-white block font-medium">{toFiniteMoney(t.closePrice).toFixed(5)}</span>
                                     </div>
                                  </div>
                                  <div className="grid grid-cols-2 gap-4">
@@ -334,7 +340,7 @@ export function JournalView({ trades, onSyncMT5, onUpdateTrade, totalCapital, re
                                           title="Stop Loss"
                                           className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm dark:text-white font-mono"
                                           value={editForm.sl || ''}
-                                          onChange={(e) => setEditForm({...editForm, sl: parseFloat(e.target.value)})}
+                                          onChange={(e) => setEditForm({...editForm, sl: e.target.value === '' ? undefined : Number(e.target.value)})}
                                           disabled={readOnly}
                                        />
                                     </div>
@@ -345,7 +351,7 @@ export function JournalView({ trades, onSyncMT5, onUpdateTrade, totalCapital, re
                                           title="Take Profit"
                                           className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm dark:text-white font-mono"
                                           value={editForm.tp || ''}
-                                          onChange={(e) => setEditForm({...editForm, tp: parseFloat(e.target.value)})}
+                                          onChange={(e) => setEditForm({...editForm, tp: e.target.value === '' ? undefined : Number(e.target.value)})}
                                           disabled={readOnly}
                                        />
                                     </div>
