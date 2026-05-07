@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Investor, Transaction } from '../types';
 import { formatCurrency } from '../lib/utils';
+import { toFiniteMoney } from '../lib/money';
 import { PieChart as PieChartIcon, BarChart3, TrendingUp, Download, Users, FileText, Loader2, ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell,
@@ -14,20 +15,20 @@ export function ReportsView({ investors, transactions }: { investors: Investor[]
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
 
-  const totalCapital = investors.reduce((sum, inv) => sum + inv.startingCapital, 0);
-  const totalHWM = investors.reduce((sum, inv) => sum + inv.highWaterMark, 0);
-  const totalFeesCollected = investors.reduce((sum, inv) => sum + inv.feeCollected, 0);
-  const managerWithdrawals = transactions.filter(t => t.type === 'manager_withdrawal').reduce((sum, t) => sum + t.amount, 0);
+  const totalCapital = investors.reduce((sum, inv) => sum + toFiniteMoney(inv.startingCapital), 0);
+  const totalHWM = investors.reduce((sum, inv) => sum + toFiniteMoney(inv.highWaterMark), 0);
+  const totalFeesCollected = investors.reduce((sum, inv) => sum + toFiniteMoney(inv.feeCollected), 0);
+  const managerWithdrawals = transactions.filter(t => t.type === 'manager_withdrawal' && t.status === 'completed').reduce((sum, t) => sum + toFiniteMoney(t.amount), 0);
   const managerBalance = totalFeesCollected - managerWithdrawals;
 
-  const totalNetProfit = investors.reduce((sum, inv) => sum + inv.netProfit, 0);
+  const totalNetProfit = investors.reduce((sum, inv) => sum + toFiniteMoney(inv.netProfit), 0);
   const activeInvestors = investors.filter(i => i.status === 'active' || !i.status).length;
   const averageAccountSize = investors.length > 0 ? totalCapital / investors.length : 0;
 
   // Group stats for chart
   const groups = investors.reduce((acc, inv) => {
     const g = inv.group || 'Ungrouped';
-    acc[g] = (acc[g] || 0) + inv.startingCapital;
+    acc[g] = (acc[g] || 0) + toFiniteMoney(inv.startingCapital);
     return acc;
   }, {} as Record<string, number>);
 

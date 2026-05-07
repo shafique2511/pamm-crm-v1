@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Investor, PeriodHistory, Transaction, Trade } from '../types';
 import { formatCurrency as globalFormatCurrency } from '../lib/utils';
+import { parsePositiveMoney, toFiniteMoney } from '../lib/money';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, DollarSign, Shield, ArrowRightLeft, Percent, PieChart as PieChartIcon, Download, Loader2, ArrowUpRight, ArrowDownRight, Activity } from 'lucide-react';
 import html2canvas from 'html2canvas';
@@ -31,8 +32,8 @@ export function InvestorDashboard({ investor, history, transactions, trades = []
   });
 
   const myTransactions = transactions.filter(t => t.investorId === investor.id);
-  const roi = investor.startingCapital > 0 ? (investor.netProfit / investor.startingCapital) * 100 : 0;
-  const distanceToHWM = investor.endingCapital - investor.highWaterMark;
+  const roi = toFiniteMoney(investor.startingCapital) > 0 ? (toFiniteMoney(investor.netProfit) / toFiniteMoney(investor.startingCapital)) * 100 : 0;
+  const distanceToHWM = toFiniteMoney(investor.endingCapital) - toFiniteMoney(investor.highWaterMark);
 
   // Pro-rata trading stats
   const winningTrades = trades.filter(t => t.profit > 0);
@@ -76,12 +77,12 @@ export function InvestorDashboard({ investor, history, transactions, trades = []
   };
 
   const handleWithdrawRequestClick = () => {
-    const amount = parseFloat(withdrawAmount);
-    if (isNaN(amount) || amount <= 0) {
+    const amount = parsePositiveMoney(withdrawAmount);
+    if (amount === null) {
       alert("Please enter a valid amount.");
       return;
     }
-    if (amount > investor.endingCapital) {
+    if (amount > toFiniteMoney(investor.endingCapital)) {
       alert("Insufficient available capital.");
       return;
     }
@@ -90,7 +91,8 @@ export function InvestorDashboard({ investor, history, transactions, trades = []
 
   const handleConfirmWithdrawRequest = () => {
     if (!onAddTransaction) return;
-    const amount = parseFloat(withdrawAmount);
+    const amount = parsePositiveMoney(withdrawAmount);
+    if (amount === null) return;
 
     onAddTransaction({
       type: 'withdrawal',

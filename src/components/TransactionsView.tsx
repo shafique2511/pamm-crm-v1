@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Transaction, Investor } from '../types';
 import { formatCurrency } from '../lib/utils';
+import { parsePositiveMoney, toFiniteMoney } from '../lib/money';
 import { 
   Plus, ArrowDownCircle, ArrowUpCircle, Wallet, Search, Filter, 
   ArrowUpDown, Download, CheckCircle2, XCircle, Clock, Hash, 
@@ -47,7 +48,16 @@ export function TransactionsView({ transactions, investors, onAddTransaction, on
   const [confirmingWithdrawal, setConfirmingWithdrawal] = useState(false);
 
   const handleAdd = () => {
-    if (!amount || type === 'all') return;
+    const parsedAmount = parsePositiveMoney(amount);
+    if (type === 'all') return;
+    if (parsedAmount === null) {
+      alert('Please enter a valid positive amount.');
+      return;
+    }
+    if (type !== 'manager_withdrawal' && !investorId) {
+      alert('Please select an investor account.');
+      return;
+    }
     
     if (type === 'manager_withdrawal' && !confirmingWithdrawal) {
       setConfirmingWithdrawal(true);
@@ -56,7 +66,7 @@ export function TransactionsView({ transactions, investors, onAddTransaction, on
 
     onAddTransaction({
       type: type as Transaction['type'],
-      amount: parseFloat(amount) || 0,
+      amount: parsedAmount,
       investorId: type === 'manager_withdrawal' ? undefined : investorId,
       date: new Date().toISOString(),
       status: 'completed',
@@ -73,9 +83,9 @@ export function TransactionsView({ transactions, investors, onAddTransaction, on
     setConfirmingWithdrawal(false);
   };
 
-  const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status === 'completed').reduce((sum, t) => sum + t.amount, 0);
-  const totalWithdrawals = transactions.filter(t => t.type === 'withdrawal' && t.status === 'completed').reduce((sum, t) => sum + t.amount, 0);
-  const totalFeePayments = transactions.filter(t => t.type === 'fee_payment' && t.status === 'completed').reduce((sum, t) => sum + t.amount, 0);
+  const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status === 'completed').reduce((sum, t) => sum + toFiniteMoney(t.amount), 0);
+  const totalWithdrawals = transactions.filter(t => t.type === 'withdrawal' && t.status === 'completed').reduce((sum, t) => sum + toFiniteMoney(t.amount), 0);
+  const totalFeePayments = transactions.filter(t => t.type === 'fee_payment' && t.status === 'completed').reduce((sum, t) => sum + toFiniteMoney(t.amount), 0);
 
   const filteredAndSortedTransactions = useMemo(() => {
     let result = transactions.filter(t => {
@@ -100,8 +110,8 @@ export function TransactionsView({ transactions, investors, onAddTransaction, on
       }
 
       let matchesAmount = true;
-      if (amountMin) matchesAmount = matchesAmount && t.amount >= parseFloat(amountMin);
-      if (amountMax) matchesAmount = matchesAmount && t.amount <= parseFloat(amountMax);
+      if (amountMin) matchesAmount = matchesAmount && toFiniteMoney(t.amount) >= toFiniteMoney(amountMin);
+      if (amountMax) matchesAmount = matchesAmount && toFiniteMoney(t.amount) <= toFiniteMoney(amountMax);
 
       return matchesFilter && matchesSearch && matchesInvestor && matchesStatus && matchesDate && matchesAmount && matchesCategory;
     });

@@ -15,7 +15,7 @@ export function AddInvestorModal({ onClose, onAdd, managers, availableGroups }: 
     investorName: '',
     password: 'password123',
     group: manager?.defaultInvestorGroup || availableGroups[0] || 'Default',
-    feePercentage: manager?.defaultFeePercentage || 20,
+    feePercentage: manager?.defaultFeePercentage ?? 20,
     startingCapital: 0,
     highWaterMark: 0,
     baseCurrency: manager?.baseCurrency || 'USD',
@@ -33,9 +33,9 @@ export function AddInvestorModal({ onClose, onAdd, managers, availableGroups }: 
     // Ensure HWM is at least starting capital if not specified
     const finalData = {
       ...formData,
-      highWaterMark: formData.highWaterMark || formData.startingCapital || 0,
+      highWaterMark: formData.highWaterMark ?? formData.startingCapital ?? 0,
       joinedAt: new Date().toISOString(),
-      endingCapital: formData.startingCapital || 0,
+      endingCapital: formData.startingCapital ?? 0,
     };
     
     onAdd(finalData);
@@ -121,7 +121,7 @@ export function AddInvestorModal({ onClose, onAdd, managers, availableGroups }: 
                   step="0.01"
                   className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                   value={formData.startingCapital}
-                  onChange={e => handleInputChange('startingCapital', parseFloat(e.target.value))}
+                  onChange={e => handleInputChange('startingCapital', e.target.value === '' ? 0 : Number(e.target.value))}
                 />
               </div>
               <div className="space-y-1">
@@ -132,7 +132,7 @@ export function AddInvestorModal({ onClose, onAdd, managers, availableGroups }: 
                     type="number" 
                     className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                     value={formData.feePercentage}
-                    onChange={e => handleInputChange('feePercentage', parseFloat(e.target.value))}
+                    onChange={e => handleInputChange('feePercentage', e.target.value === '' ? 0 : Number(e.target.value))}
                   />
                 </div>
               </div>
@@ -154,7 +154,7 @@ export function AddInvestorModal({ onClose, onAdd, managers, availableGroups }: 
                       type="number" 
                       className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                       value={formData.ibCommissionRate}
-                      onChange={e => handleInputChange('ibCommissionRate', parseFloat(e.target.value))}
+                      onChange={e => handleInputChange('ibCommissionRate', e.target.value === '' ? 0 : Number(e.target.value))}
                     />
                   </div>
                 </div>

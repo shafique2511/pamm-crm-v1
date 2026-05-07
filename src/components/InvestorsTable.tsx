@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Investor } from '../types';
 import { formatCurrency, formatPercent } from '../lib/utils';
+import { toFiniteMoney } from '../lib/money';
 import { Edit2, Trash2, QrCode, Check, FileText, ArrowUpDown, Circle, UserCheck, UserMinus, ShieldAlert, Calendar, UserPlus } from 'lucide-react';
 import { InvoiceModal } from './InvoiceModal';
 
@@ -68,28 +69,28 @@ export function InvestorsTable({ investors, availableGroups, enableIBModule, onU
       const updates = { ...prev, [field]: value };
       
       if (field === 'startingCapital') {
-        const newCap = Number(value) || 0;
-        updates.endingCapital = newCap + (prev.netProfit || 0) - (prev.cashPayout || 0);
-        if (prev.highWaterMark === 0 || (prev.highWaterMark < newCap && (!prev.netProfit || prev.netProfit === 0))) {
+        const newCap = toFiniteMoney(value);
+        updates.endingCapital = newCap + toFiniteMoney(prev.netProfit) - toFiniteMoney(prev.cashPayout);
+        if (prev.highWaterMark === 0 || (toFiniteMoney(prev.highWaterMark) < newCap && (!prev.netProfit || prev.netProfit === 0))) {
           updates.highWaterMark = newCap;
         }
       }
 
       if (field === 'cashPayout') {
-        const payout = Number(value) || 0;
-        updates.reinvestAmt = (prev.netProfit || 0) - payout;
-        updates.endingCapital = (prev.startingCapital || 0) + updates.reinvestAmt;
+        const payout = toFiniteMoney(value);
+        updates.reinvestAmt = toFiniteMoney(prev.netProfit) - payout;
+        updates.endingCapital = toFiniteMoney(prev.startingCapital) + updates.reinvestAmt;
       }
       
       if (field === 'reinvestAmt') {
-        const reinvest = Number(value) || 0;
-        updates.cashPayout = (prev.netProfit || 0) - reinvest;
-        updates.endingCapital = (prev.startingCapital || 0) + reinvest;
+        const reinvest = toFiniteMoney(value);
+        updates.cashPayout = toFiniteMoney(prev.netProfit) - reinvest;
+        updates.endingCapital = toFiniteMoney(prev.startingCapital) + reinvest;
       }
       
       if (field === 'feeCollected') {
-        const collected = Number(value) || 0;
-        const totalFeesOwed = (prev.yourFee || 0) + (prev.unpaidFee || 0); // This is just a helper, actual logic in Period Calculation
+        const collected = toFiniteMoney(value);
+        const totalFeesOwed = toFiniteMoney(prev.yourFee) + toFiniteMoney(prev.unpaidFee); // This is just a helper, actual logic in Period Calculation
         updates.unpaidFee = Math.max(0, totalFeesOwed - collected);
       }
 
@@ -237,7 +238,7 @@ export function InvestorsTable({ investors, availableGroups, enableIBModule, onU
                           type="number" 
                           className="w-24 px-2 py-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded text-xs dark:text-white"
                           value={editForm.startingCapital || 0}
-                          onChange={(e) => handleInputChange('startingCapital', parseFloat(e.target.value))}
+                          onChange={(e) => handleInputChange('startingCapital', e.target.value === '' ? 0 : Number(e.target.value))}
                         />
                       ) : formatCurrency(inv.startingCapital)}
                     </td>
@@ -247,7 +248,7 @@ export function InvestorsTable({ investors, availableGroups, enableIBModule, onU
                           type="number" 
                           className="w-24 px-2 py-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded text-xs dark:text-white"
                           value={editForm.highWaterMark || 0}
-                          onChange={(e) => handleInputChange('highWaterMark', parseFloat(e.target.value))}
+                          onChange={(e) => handleInputChange('highWaterMark', e.target.value === '' ? 0 : Number(e.target.value))}
                         />
                       ) : formatCurrency(inv.highWaterMark)}
                     </td>
@@ -257,7 +258,7 @@ export function InvestorsTable({ investors, availableGroups, enableIBModule, onU
                           type="number" 
                           className="w-20 px-2 py-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded text-xs dark:text-white"
                           value={editForm.lossCarryover || 0}
-                          onChange={(e) => handleInputChange('lossCarryover', parseFloat(e.target.value))}
+                          onChange={(e) => handleInputChange('lossCarryover', e.target.value === '' ? 0 : Number(e.target.value))}
                         />
                       ) : formatCurrency(inv.lossCarryover)}
                     </td>
@@ -276,7 +277,7 @@ export function InvestorsTable({ investors, availableGroups, enableIBModule, onU
                             type="number" 
                             className="w-16 px-2 py-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded text-xs dark:text-white"
                             value={editForm.customFeePercentage ?? editForm.feePercentage}
-                            onChange={(e) => handleInputChange('customFeePercentage', parseFloat(e.target.value))}
+                            onChange={(e) => handleInputChange('customFeePercentage', e.target.value === '' ? 0 : Number(e.target.value))}
                           />
                           <span className="text-xs text-slate-400">%</span>
                         </div>
@@ -304,7 +305,7 @@ export function InvestorsTable({ investors, availableGroups, enableIBModule, onU
                               type="number" 
                               className="w-16 px-2 py-1 border rounded text-xs dark:bg-slate-950 dark:border-slate-700 dark:text-white"
                               value={editForm.ibCommissionRate || 0}
-                              onChange={(e) => handleInputChange('ibCommissionRate', parseFloat(e.target.value))}
+                              onChange={(e) => handleInputChange('ibCommissionRate', e.target.value === '' ? 0 : Number(e.target.value))}
                             />
                           ) : (inv.ibCommissionRate ? `${inv.ibCommissionRate}%` : '0%')}
                         </td>

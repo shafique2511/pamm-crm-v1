@@ -17,6 +17,8 @@ import { AddInvestorModal } from './components/AddInvestorModal';
 import { Investor, Manager, Transaction, Trade, PeriodHistory, AuditLog } from './types';
 import { Plus, Calculator, Database, Copy, CheckCircle2, Menu, Search, Filter } from 'lucide-react';
 import { supabase } from './lib/supabase';
+import { toFiniteMoney } from './lib/money';
+import { calculateSimplePammDistribution } from './lib/simplePamm';
 
 const INITIAL_MANAGERS: Manager[] = [
   { id: '1', username: 'admin', password: 'password', name: 'Super Admin' }
@@ -44,13 +46,13 @@ export default function App() {
   const [periodProfit, setPeriodProfit] = useState<number>(0);
   const [brokerBalance, setBrokerBalance] = useState<number>(0);
 
-  const totalStartingCapital = investors.reduce((sum, inv) => sum + inv.startingCapital, 0);
+  const totalStartingCapital = investors.reduce((sum, inv) => sum + toFiniteMoney(inv.startingCapital), 0);
   
   // Calculate current Manager Wallet Balance (fees collected but not yet withdrawn)
   const managerWithdrawals = transactions
     .filter(t => t.type === 'manager_withdrawal' && t.status === 'completed')
-    .reduce((sum, t) => sum + t.amount, 0);
-  const managerWalletBalance = investors.reduce((sum, inv) => sum + (inv.feeCollected || 0), 0) - managerWithdrawals;
+    .reduce((sum, t) => sum + toFiniteMoney(t.amount), 0);
+  const managerWalletBalance = investors.reduce((sum, inv) => sum + toFiniteMoney(inv.feeCollected), 0) - managerWithdrawals;
 
   const handleBrokerBalanceChange = (val: number) => {
     setBrokerBalance(val);
@@ -292,7 +294,7 @@ export default function App() {
 
   const handleAddTransaction = async (t: Partial<Transaction>) => {
     const newTx = { ...t, id: window.crypto?.randomUUID?.() ?? Math.random().toString(36).substring(2, 15) } as Transaction;
-    setTransactions([newTx, ...transactions]);
+    setTransactions(prev => [newTx, ...prev]);
     logAction('Record Transaction', `Recorded ${t.type} of $${t.amount}${t.referenceId ? ` (Ref: ${t.referenceId})` : ''}`, 'transaction');
     if (supabase) {
       try {
@@ -306,8 +308,10 @@ export default function App() {
 
   const handleUpdateTransactionStatus = async (id: string, status: 'completed' | 'rejected') => {
     let affectedTx: Transaction | undefined;
+    let previousStatus: Transaction['status'] | undefined;
     const updatedTransactions = transactions.map(t => {
       if (t.id === id) {
+        previousStatus = t.status;
         affectedTx = { ...t, status };
         return affectedTx;
       }
@@ -320,12 +324,13 @@ export default function App() {
     logAction('Update Transaction', `Updated transaction ${id} status to ${status}`, 'transaction');
     
     // Process capital deduction on approval for investor withdrawals
-    if (affectedTx.type === 'withdrawal' && affectedTx.investorId && status === 'completed') {
+    if (affectedTx.type === 'withdrawal' && affectedTx.investorId && previousStatus === 'pending' && status === 'completed') {
       const invToUpdate = investors.find(i => i.id === affectedTx!.investorId);
       if (invToUpdate) {
+        const amount = toFiniteMoney(affectedTx.amount);
         handleUpdateInvestor(invToUpdate.id, {
-          endingCapital: invToUpdate.endingCapital - affectedTx.amount,
-          cashPayout: invToUpdate.cashPayout + affectedTx.amount
+          endingCapital: toFiniteMoney(invToUpdate.endingCapital) - amount,
+          cashPayout: toFiniteMoney(invToUpdate.cashPayout) + amount
         });
       }
     }
@@ -450,40 +455,30 @@ export default function App() {
   };
 
   const calculatePeriod = async () => {
-    const totalInvestorCapital = investors.reduce((sum, inv) => sum + inv.startingCapital, 0);
-    const totalStartingEquity = totalInvestorCapital + managerWalletBalance;
-    
-    // Calculate the growth rate of the entire master account
-    const growthRate = totalStartingEquity > 0 ? periodProfit / totalStartingEquity : 0;
+    const distribution = calculateSimplePammDistribution(
+      toFiniteMoney(periodProfit),
+      investors.map(inv => ({
+        investorId: inv.id,
+        startingCapital: toFiniteMoney(inv.startingCapital),
+        previousHighWaterMark: toFiniteMoney(inv.highWaterMark),
+        performanceFeePercent: toFiniteMoney(inv.customFeePercentage ?? inv.feePercentage ?? 20) / 100,
+        isActive: (inv.status || 'active') === 'active',
+      }))
+    );
+
+    const byInvestor = new Map(distribution.investors.map(result => [result.investorId, result]));
 
     const updated = investors.map(inv => {
-      // Investor's share of the growth
-      const individualProfitShare = inv.startingCapital * growthRate;
-      const sharePercentage = totalInvestorCapital > 0 ? (inv.startingCapital / totalInvestorCapital) * 100 : 0;
-      
-      const grossValue = inv.startingCapital + individualProfitShare;
-      let yourFee = 0;
-
-      const effectiveFeePercentage = inv.customFeePercentage ?? inv.feePercentage ?? 20;
-
-      // HWM Logic: Fee is only taken on profits above the previous high.
-      if (grossValue > inv.highWaterMark) {
-        const taxableProfit = grossValue - inv.highWaterMark;
-        yourFee = taxableProfit * (effectiveFeePercentage / 100);
-      }
-
-      const netProfit = individualProfitShare - yourFee;
-      // Ending capital is after performance fee and cash payout
-      const endingCapital = inv.startingCapital + netProfit - inv.cashPayout;
-
+      const result = byInvestor.get(inv.id);
+      if (!result) return inv;
       return {
         ...inv,
-        sharePercentage,
-        individualProfitShare,
-        yourFee,
-        netProfit,
-        endingCapital,
-        unpaidFee: inv.unpaidFee
+        sharePercentage: result.investorShare * 100,
+        individualProfitShare: result.grossPnl,
+        yourFee: result.performanceFee,
+        netProfit: result.netPnl,
+        endingCapital: result.endingCapitalAfterFee,
+        unpaidFee: toFiniteMoney(inv.unpaidFee)
       };
     });
 
@@ -522,30 +517,14 @@ export default function App() {
       }
     }
 
-    const totalInvestorCapital = investors.reduce((sum, inv) => sum + inv.startingCapital, 0);
-    const totalStartingEquity = totalInvestorCapital + managerWalletBalance;
-    const growthRate = totalStartingEquity > 0 ? periodProfit / totalStartingEquity : 0;
-    
-    // Manager's own profit from their wallet balance sitting in the account
-    const managerDirectProfit = managerWalletBalance * growthRate;
-
     const updated = investors.map(inv => {
-      // High Water Mark logic: new HWM is the max of current HWM or Ending Capital
-      const adjustedHWM = Math.max(0, inv.highWaterMark - inv.cashPayout);
-      const newHWM = Math.max(adjustedHWM, inv.endingCapital);
-
-      // Manager's new fee collected: Existing + Performance Fee from this investor
-      // AND a portion of the Manager's own direct profit (distributed across investors for simplicity in state, 
-      // or we can add it to a specific record. We'll add a share of direct profit to the first investor 
-      // or just ensure feeCollected is updated correctly.)
-      
-      // Professional approach: We distribute the direct profit proportionally as if the manager was an investor
-      const managerProfitShareForThisRecord = investors.length > 0 ? (managerDirectProfit / investors.length) : 0;
-      const newFeeCollected = inv.feeCollected + (inv.yourFee || 0) + managerProfitShareForThisRecord;
+      const endingCapital = toFiniteMoney(inv.endingCapital);
+      const newHWM = Math.max(toFiniteMoney(inv.highWaterMark), endingCapital);
+      const newFeeCollected = toFiniteMoney(inv.feeCollected) + toFiniteMoney(inv.yourFee);
 
       return {
         ...inv,
-        startingCapital: inv.endingCapital,
+        startingCapital: endingCapital,
         highWaterMark: newHWM,
         feeCollected: newFeeCollected,
         individualProfitShare: 0,

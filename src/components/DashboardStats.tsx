@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Investor, Transaction, Trade, PeriodHistory } from '../types';
 import { formatCurrency } from '../lib/utils';
+import { parsePositiveMoney, toFiniteMoney } from '../lib/money';
 import { TrendingUp, DollarSign, Users, AlertCircle, Wallet, Percent, Award, Activity, Target, TrendingDown, ArrowRight, Clock } from 'lucide-react';
 
 interface DashboardStatsProps {
@@ -18,19 +19,19 @@ export function DashboardStats({ investors, transactions, trades = [], history =
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawNotes, setWithdrawNotes] = useState('');
 
-  const totalCapital = investors.reduce((sum, inv) => sum + inv.startingCapital, 0);
-  const totalEndingCapital = investors.reduce((sum, inv) => sum + inv.endingCapital, 0);
-  const totalUnpaidFees = investors.reduce((sum, inv) => sum + (inv.unpaidFee || 0) + (inv.yourFee || 0), 0);
+  const totalCapital = investors.reduce((sum, inv) => sum + toFiniteMoney(inv.startingCapital), 0);
+  const totalEndingCapital = investors.reduce((sum, inv) => sum + toFiniteMoney(inv.endingCapital), 0);
+  const totalUnpaidFees = investors.reduce((sum, inv) => sum + toFiniteMoney(inv.unpaidFee) + toFiniteMoney(inv.yourFee), 0);
   const totalInvestors = investors.length;
 
-  const managerWithdrawalTxs = transactions.filter(t => t.type === 'manager_withdrawal');
+  const managerWithdrawalTxs = transactions.filter(t => t.type === 'manager_withdrawal' && t.status === 'completed');
   const investorWithdrawalTxs = transactions.filter(t => t.type === 'withdrawal');
-  const managerWithdrawals = managerWithdrawalTxs.reduce((sum, t) => sum + t.amount, 0);
-  const managerWalletBalance = investors.reduce((sum, inv) => sum + inv.feeCollected, 0) - managerWithdrawals;
+  const managerWithdrawals = managerWithdrawalTxs.reduce((sum, t) => sum + toFiniteMoney(t.amount), 0);
+  const managerWalletBalance = investors.reduce((sum, inv) => sum + toFiniteMoney(inv.feeCollected), 0) - managerWithdrawals;
 
   const handleWithdraw = () => {
-    const amount = parseFloat(withdrawAmount);
-    if (isNaN(amount) || amount <= 0) {
+    const amount = parsePositiveMoney(withdrawAmount);
+    if (amount === null) {
       alert("Please enter a valid amount.");
       return;
     }
