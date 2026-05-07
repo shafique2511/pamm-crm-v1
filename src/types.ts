@@ -16,6 +16,8 @@ export interface Investor {
   email?: string;
   phone?: string;
   country?: string;
+  idNumber?: string;
+  address?: string;
   memberTier?: string;
   emailNotifications?: boolean;
   highWaterMark: number;
