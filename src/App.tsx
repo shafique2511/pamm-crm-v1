@@ -22,6 +22,7 @@ import { calculateSimplePammDistribution } from './lib/simplePamm';
 import { applyCompletedCapitalTransaction } from './lib/capitalTransactions';
 import { getCapitalUpdatesForStatusTransition } from './lib/transactionStatus';
 import { isPeriodReadyForRollover } from './lib/periodClose';
+import { mergeTrades, normalizeTrade } from './lib/trades';
 
 const INITIAL_MANAGERS: Manager[] = [
   { id: '1', username: 'admin', password: 'password', name: 'Super Admin' }
@@ -392,14 +393,26 @@ export default function App() {
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
-            // Assuming the API returns an array of trades matching our Trade interface
-            setTrades(data);
-            if (supabase) {
-              // Upsert or insert logic depending on backend implementation
-              // For simplicity, we'll just insert new ones if we had a way to check, 
-              // but here we just replace or insert.
+            const syncedTrades = data.map(normalizeTrade).filter((trade): trade is Trade => trade !== null);
+            if (syncedTrades.length === 0) {
+              return { success: false, count: 0, error: "MT5 API returned trades, but none matched the expected journal format." };
             }
-            return { success: true, count: data.length };
+            setTrades(prev => mergeTrades(prev, syncedTrades));
+            if (supabase) {
+              const tickets = syncedTrades.map(trade => trade.ticket);
+              const { data: existingRows, error: readError } = await supabase.from('trades').select('ticket').in('ticket', tickets);
+              if (readError) {
+                console.error("Failed to check existing synced trades", readError);
+              } else {
+                const existingTickets = new Set((existingRows || []).map(row => row.ticket));
+                const newTrades = syncedTrades.filter(trade => !existingTickets.has(trade.ticket));
+                if (newTrades.length > 0) {
+                  const { error } = await supabase.from('trades').insert(newTrades);
+                  if (error) console.error("Failed to persist synced trades", error);
+                }
+              }
+            }
+            return { success: true, count: syncedTrades.length };
           }
         }
       } catch (e) {
@@ -465,10 +478,21 @@ export default function App() {
       }
     ];
 
-    setTrades(prev => [...mockTrades, ...prev]);
+    setTrades(prev => mergeTrades(prev, mockTrades));
     
     if (supabase) {
-      await supabase.from('trades').insert(mockTrades);
+      const tickets = mockTrades.map(trade => trade.ticket);
+      const { data: existingRows, error: readError } = await supabase.from('trades').select('ticket').in('ticket', tickets);
+      if (readError) {
+        console.error("Failed to check existing mock trades", readError);
+      } else {
+        const existingTickets = new Set((existingRows || []).map(row => row.ticket));
+        const newTrades = mockTrades.filter(trade => !existingTickets.has(trade.ticket));
+        if (newTrades.length > 0) {
+          const { error } = await supabase.from('trades').insert(newTrades);
+          if (error) console.error("Failed to persist mock trades", error);
+        }
+      }
     }
 
     return { success: true, count: mockTrades.length };

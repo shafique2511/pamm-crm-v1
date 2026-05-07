@@ -22,16 +22,21 @@ export function JournalView({ trades, onSyncMT5, onUpdateTrade, readOnly }: { tr
   const handleSync = async () => {
     setIsSyncing(true);
     setSyncStatus(null);
-    const result = await onSyncMT5();
-    
-    if (result.success) {
-      setSyncStatus({ message: `Successfully synced ${result.count} trades.`, type: 'success' });
-    } else {
-      setSyncStatus({ message: result.error || 'Failed to sync trades.', type: 'error' });
+    try {
+      const result = await onSyncMT5();
+
+      if (result.success) {
+        setSyncStatus({ message: `Successfully synced ${result.count} trades.`, type: 'success' });
+      } else {
+        setSyncStatus({ message: result.error || 'Failed to sync trades.', type: 'error' });
+      }
+    } catch (error) {
+      console.error('Trading journal sync failed', error);
+      setSyncStatus({ message: 'Failed to sync trades. Please check the connection settings.', type: 'error' });
+    } finally {
+      setIsSyncing(false);
+      setTimeout(() => setSyncStatus(null), 5000);
     }
-    
-    setIsSyncing(false);
-    setTimeout(() => setSyncStatus(null), 5000);
   };
 
   const filteredTrades = trades.filter(t => {
