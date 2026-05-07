@@ -20,6 +20,12 @@ export interface Investor {
   address?: string;
   memberTier?: string;
   emailNotifications?: boolean;
+  whatsappNotifications?: boolean;
+  telegramNotifications?: boolean;
+  statementDelivery?: 'portal' | 'email' | 'whatsapp' | 'telegram';
+  dateFormat?: 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'YYYY-MM-DD';
+  privacyConsentAt?: string;
+  riskDisclaimerAcceptedAt?: string;
   highWaterMark: number;
   startingCapital: number;
   lossCarryover: number;
@@ -104,6 +110,20 @@ export interface Manager {
   defaultFeePercentage?: number;
   brandName?: string;
   supportEmail?: string;
+  timezone?: string;
+  statementFooter?: string;
+  logoUrl?: string;
+  defaultIbRate?: number;
+  ibPayoutApprovalRequired?: boolean;
+  referralCodeLockEnabled?: boolean;
+  lockFinancialEditsAfterRollover?: boolean;
+  requireCapitalApproval?: boolean;
+  auditRetentionDays?: number;
+  myfxbookProxyUrl?: string;
+  ftpProxyUrl?: string;
+  whatsappTemplate?: string;
+  telegramTemplate?: string;
+  dashboardReportingPeriod?: 'month' | 'quarter' | 'year' | 'all';
 }
 
 export interface Transaction {

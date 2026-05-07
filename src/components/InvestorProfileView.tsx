@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Investor } from '../types';
-import { User, Key, Building2, QrCode, Save, CheckCircle2, Phone, Flag, Mail, Bell } from 'lucide-react';
+import { User, Key, Building2, QrCode, Save, CheckCircle2, Phone, Flag, Mail, Bell, ShieldCheck, MessageSquare } from 'lucide-react';
 import { hashPassword, formatCurrency } from '../lib/utils';
 
 export function InvestorProfileView({ investor, onUpdateInvestor }: { investor: Investor, onUpdateInvestor: (id: string, updates: Partial<Investor>) => void }) {
@@ -12,7 +12,14 @@ export function InvestorProfileView({ investor, onUpdateInvestor }: { investor: 
   const [phone, setPhone] = useState(investor.phone || '');
   const [email, setEmail] = useState(investor.email || '');
   const [country, setCountry] = useState(investor.country || '');
+  const [address, setAddress] = useState(investor.address || '');
   const [emailNotifications, setEmailNotifications] = useState(investor.emailNotifications || false);
+  const [whatsappNotifications, setWhatsappNotifications] = useState(investor.whatsappNotifications || false);
+  const [telegramNotifications, setTelegramNotifications] = useState(investor.telegramNotifications || false);
+  const [statementDelivery, setStatementDelivery] = useState<Investor['statementDelivery']>(investor.statementDelivery || 'portal');
+  const [dateFormat, setDateFormat] = useState<Investor['dateFormat']>(investor.dateFormat || 'MM/DD/YYYY');
+  const [privacyConsent, setPrivacyConsent] = useState(!!investor.privacyConsentAt);
+  const [riskDisclaimerAccepted, setRiskDisclaimerAccepted] = useState(!!investor.riskDisclaimerAcceptedAt);
 
   const [statusMessage, setStatusMessage] = useState('');
 
@@ -23,7 +30,14 @@ export function InvestorProfileView({ investor, onUpdateInvestor }: { investor: 
       phone,
       email,
       country,
-      emailNotifications
+      address,
+      emailNotifications,
+      whatsappNotifications,
+      telegramNotifications,
+      statementDelivery,
+      dateFormat,
+      privacyConsentAt: privacyConsent ? investor.privacyConsentAt || new Date().toISOString() : undefined,
+      riskDisclaimerAcceptedAt: riskDisclaimerAccepted ? investor.riskDisclaimerAcceptedAt || new Date().toISOString() : undefined,
     });
     setStatusMessage('Profile updated successfully.');
     setTimeout(() => setStatusMessage(''), 3000);
@@ -144,6 +158,17 @@ export function InvestorProfileView({ investor, onUpdateInvestor }: { investor: 
                 />
               </div>
             </div>
+
+            <div className="space-y-1.5 md:col-span-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Address</label>
+              <textarea
+                rows={3}
+                placeholder="Residential or mailing address"
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm dark:text-white resize-none"
+                value={address}
+                onChange={e => setAddress(e.target.value)}
+              />
+            </div>
           </div>
         </div>
 
@@ -183,20 +208,56 @@ export function InvestorProfileView({ investor, onUpdateInvestor }: { investor: 
               <Bell className="w-5 h-5 text-rose-500" />
               <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Preferences</h3>
             </div>
-            <label className="flex items-center gap-3 cursor-pointer group">
-              <div className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors ${emailNotifications ? 'bg-rose-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
-                <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${emailNotifications ? 'translate-x-6' : 'translate-x-0'}`}></div>
+            <div className="space-y-4">
+              <InvestorToggle label="Email statements and alerts" checked={emailNotifications} onChange={setEmailNotifications} />
+              <InvestorToggle label="WhatsApp notifications" checked={whatsappNotifications} onChange={setWhatsappNotifications} />
+              <InvestorToggle label="Telegram notifications" checked={telegramNotifications} onChange={setTelegramNotifications} />
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Statement Delivery</label>
+                <select value={statementDelivery} onChange={e => setStatementDelivery(e.target.value as Investor['statementDelivery'])} className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-sm dark:text-white">
+                  <option value="portal">Portal only</option>
+                  <option value="email">Email</option>
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="telegram">Telegram</option>
+                </select>
               </div>
-              <input 
-                type="checkbox" 
-                className="hidden" 
-                checked={emailNotifications}
-                onChange={() => setEmailNotifications(!emailNotifications)}
-              />
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
-                Email Notifications (Statements & Alerts)
-              </span>
-            </label>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Date Format</label>
+                <select value={dateFormat} onChange={e => setDateFormat(e.target.value as Investor['dateFormat'])} className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none text-sm dark:text-white">
+                  <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                  <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                  <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-3 mb-6">
+            <ShieldCheck className="w-5 h-5 text-emerald-500" />
+            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Security & Consent</h3>
+          </div>
+          <div className="space-y-4">
+            <InvestorToggle label="I accept the platform privacy policy" checked={privacyConsent} onChange={setPrivacyConsent} />
+            <InvestorToggle label="I acknowledge investment and reporting risk disclaimers" checked={riskDisclaimerAccepted} onChange={setRiskDisclaimerAccepted} />
+            <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 p-4 text-xs text-slate-500 dark:text-slate-400">
+              Last login activity and session controls should be enforced by Supabase Auth in production. This profile stores acknowledgement timestamps for reporting.
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-3 mb-6">
+            <MessageSquare className="w-5 h-5 text-blue-500" />
+            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Delivery Channels</h3>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <ChannelStatus label="Email" active={emailNotifications} />
+            <ChannelStatus label="WhatsApp" active={whatsappNotifications} />
+            <ChannelStatus label="Telegram" active={telegramNotifications} />
           </div>
         </div>
       </div>
@@ -280,6 +341,30 @@ export function InvestorProfileView({ investor, onUpdateInvestor }: { investor: 
            </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function InvestorToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <label className="flex items-center justify-between gap-4 cursor-pointer group">
+      <span className="text-sm font-medium text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{label}</span>
+      <button
+        type="button"
+        onClick={() => onChange(!checked)}
+        className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors ${checked ? 'bg-rose-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+      >
+        <span className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${checked ? 'translate-x-6' : 'translate-x-0'}`} />
+      </button>
+    </label>
+  );
+}
+
+function ChannelStatus({ label, active }: { label: string; active: boolean }) {
+  return (
+    <div className={`rounded-2xl border p-4 ${active ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400' : 'border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400'}`}>
+      <div className="text-xs font-black uppercase tracking-widest">{label}</div>
+      <div className="mt-1 text-sm font-bold">{active ? 'Enabled' : 'Disabled'}</div>
     </div>
   );
 }
