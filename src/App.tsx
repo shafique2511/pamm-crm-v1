@@ -20,6 +20,7 @@ import { supabase } from './lib/supabase';
 import { toFiniteMoney } from './lib/money';
 import { calculateSimplePammDistribution } from './lib/simplePamm';
 import { applyCompletedCapitalTransaction } from './lib/capitalTransactions';
+import { getCapitalUpdatesForStatusTransition } from './lib/transactionStatus';
 
 const INITIAL_MANAGERS: Manager[] = [
   { id: '1', username: 'admin', password: 'password', name: 'Super Admin' }
@@ -343,12 +344,21 @@ export default function App() {
     setTransactions(updatedTransactions);
     logAction('Update Transaction', `Updated transaction ${id} status to ${status}`, 'transaction');
     
-    // Process capital deduction on approval for investor withdrawals
-    if (affectedTx.type === 'withdrawal' && affectedTx.investorId && previousStatus === 'pending' && status === 'completed') {
+    let investorCapitalUpdate: { investorId: string; updates: Partial<Investor> } | null = null;
+
+    if (affectedTx.investorId) {
       const invToUpdate = investors.find(i => i.id === affectedTx!.investorId);
       if (invToUpdate) {
-        const updates = applyCompletedCapitalTransaction(invToUpdate, affectedTx);
-        if (updates) handleUpdateInvestor(invToUpdate.id, updates);
+        const updates = getCapitalUpdatesForStatusTransition(invToUpdate, affectedTx, status, previousStatus);
+        if (updates) {
+          investorCapitalUpdate = { investorId: invToUpdate.id, updates };
+          setInvestors(prev => prev.map(inv => inv.id === invToUpdate.id ? { ...inv, ...updates } : inv));
+          logAction(
+            'Apply Capital Transaction',
+            `Applied approved ${affectedTx.type} of $${affectedTx.amount} to ${invToUpdate.investorName}`,
+            'transaction'
+          );
+        }
       }
     }
 
@@ -360,6 +370,9 @@ export default function App() {
     if (supabase) {
       try {
         await supabase.from('transactions').update({ status }).eq('id', id);
+        if (investorCapitalUpdate) {
+          await supabase.from('investors').update(investorCapitalUpdate.updates).eq('id', investorCapitalUpdate.investorId);
+        }
       } catch (e) {
         console.error("Failed to update transaction", e);
       }
