@@ -21,6 +21,7 @@ import { toFiniteMoney } from './lib/money';
 import { calculateSimplePammDistribution } from './lib/simplePamm';
 import { applyCompletedCapitalTransaction } from './lib/capitalTransactions';
 import { getCapitalUpdatesForStatusTransition } from './lib/transactionStatus';
+import { isPeriodReadyForRollover } from './lib/periodClose';
 
 const INITIAL_MANAGERS: Manager[] = [
   { id: '1', username: 'admin', password: 'password', name: 'Super Admin' }
@@ -46,6 +47,7 @@ export default function App() {
   const [periodHistory, setPeriodHistory] = useState<PeriodHistory[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [periodProfit, setPeriodProfit] = useState<number>(0);
+  const [lastDistributedPeriodProfit, setLastDistributedPeriodProfit] = useState<number | null>(null);
   const [brokerBalance, setBrokerBalance] = useState<number>(0);
 
   const totalStartingCapital = investors.reduce((sum, inv) => sum + toFiniteMoney(inv.startingCapital), 0);
@@ -62,6 +64,7 @@ export default function App() {
     // Profit should only be calculated on Top of the total starting equity
     const totalStartingEquity = totalStartingCapital + managerWalletBalance;
     setPeriodProfit(totalStartingEquity > 0 ? val - totalStartingEquity : val);
+    setLastDistributedPeriodProfit(null);
   };
   const [showRolloverConfirm, setShowRolloverConfirm] = useState(false);
   const [showAddInvestor, setShowAddInvestor] = useState(false);
@@ -513,6 +516,7 @@ export default function App() {
     });
 
     setInvestors(updated);
+    setLastDistributedPeriodProfit(toFiniteMoney(periodProfit));
 
     if (supabase) {
       for (const inv of updated) {
@@ -522,6 +526,12 @@ export default function App() {
   };
 
   const rolloverPeriod = async () => {
+    if (!isPeriodReadyForRollover(lastDistributedPeriodProfit, periodProfit)) {
+      alert("Please distribute the current period profit before rolling over. The investor allocation must match the latest period profit value.");
+      setShowRolloverConfirm(false);
+      return;
+    }
+
     // Save snapshot to history
     const historyRecord: PeriodHistory = {
       id: window.crypto?.randomUUID?.() ?? Math.random().toString(36).substring(2, 15),
@@ -567,6 +577,7 @@ export default function App() {
     
     setInvestors(updated);
     setPeriodProfit(0);
+    setLastDistributedPeriodProfit(null);
     setBrokerBalance(0);
     setShowRolloverConfirm(false);
 
@@ -1004,7 +1015,10 @@ create table if not exists audit_logs (
                       <input 
                         type="number" 
                         value={periodProfit}
-                        onChange={(e) => setPeriodProfit(parseFloat(e.target.value) || 0)}
+                        onChange={(e) => {
+                          setPeriodProfit(parseFloat(e.target.value) || 0);
+                          setLastDistributedPeriodProfit(null);
+                        }}
                         className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all dark:text-white font-semibold"
                         placeholder="Profit to distribute"
                       />
